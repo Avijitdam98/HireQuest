@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<aiml version="2.0">
+    <category>
+        <pattern>HELLO</pattern>
+        <template>Hello! Welcome to SkillMatch. How can I help you today?</template>
+    </category>
+
+    <category>
+        <pattern>WHAT IS SKILLMATCH</pattern>
+        <template>SkillMatch is an AI-powered platform that connects job seekers, professionals, and businesses based on skills and project needs. We offer job matching, team collaboration, and career development tools.</template>
+    </category>
+
+    <category>
+        <pattern>HOW DO I FIND A JOB</pattern>
+        <template>To find a job on SkillMatch:
+1. Complete your profile with skills and experience
+2. Browse our AI-recommended job matches
+3. Apply directly through our platform
+4. Track your applications in your dashboard</template>
+    </category>
+</aiml>
