@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Outlet, useNavigate, Link } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router-dom';
 import {
   Box,
   AppBar,
@@ -29,8 +29,12 @@ import {
   PlusCircle,
   FileText,
   Home,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { useThemeMode } from '../../providers/ThemeProvider';
+import Logo from '../common/Logo';
 
 const drawerWidth = 240;
 
@@ -38,6 +42,7 @@ const Layout = ({ children }) => {
   const theme = useTheme();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const { mode, toggleTheme } = useThemeMode();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
 
@@ -83,12 +88,20 @@ const Layout = ({ children }) => {
           { text: 'My Applications', icon: <FileText />, path: '/applications' },
         ]),
     { text: 'Chat', icon: <MessageSquare />, path: '/chat' },
-    { text: 'Teams', icon: <Users />, path: '/teams' },
   ];
 
   const drawer = (
     <Box>
-      <Toolbar />
+      <Box 
+        sx={{ 
+          p: 2, 
+          display: 'flex', 
+          justifyContent: 'center',
+          bgcolor: theme.palette.background.paper,
+        }}
+      >
+        <Logo size="medium" />
+      </Box>
       <Divider />
       <List>
         {menuItems.map((item) => (
@@ -98,9 +111,29 @@ const Layout = ({ children }) => {
                 navigate(item.path);
                 setMobileOpen(false);
               }}
+              sx={{
+                color: theme.palette.text.primary,
+                '&:hover': {
+                  bgcolor: theme.palette.action.hover,
+                },
+              }}
             >
-              <ListItemIcon>{item.icon}</ListItemIcon>
-              <ListItemText primary={item.text} />
+              <ListItemIcon 
+                sx={{ 
+                  color: theme.palette.primary.main,
+                  minWidth: 40,
+                }}
+              >
+                {item.icon}
+              </ListItemIcon>
+              <ListItemText 
+                primary={item.text} 
+                sx={{
+                  '& .MuiTypography-root': {
+                    color: theme.palette.text.primary,
+                  },
+                }}
+              />
             </ListItemButton>
           </ListItem>
         ))}
@@ -109,7 +142,7 @@ const Layout = ({ children }) => {
   );
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+    <Box sx={{ display: 'flex' }}>
       <AppBar
         position="fixed"
         sx={{
@@ -128,17 +161,18 @@ const Layout = ({ children }) => {
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            Job Match
-          </Typography>
-          <IconButton onClick={handleMenuOpen} size="small">
+          <Box sx={{ flexGrow: 1 }} />
+          <IconButton onClick={toggleTheme} color="inherit">
+            {mode === 'dark' ? <Sun /> : <Moon />}
+          </IconButton>
+          <IconButton
+            onClick={handleMenuOpen}
+            sx={{ ml: 2 }}
+          >
             <Avatar
-              alt={user?.email}
               src={user?.user_metadata?.avatar_url}
-              sx={{ width: 32, height: 32 }}
-            >
-              {user?.email?.[0]?.toUpperCase()}
-            </Avatar>
+              alt={user?.user_metadata?.full_name}
+            />
           </IconButton>
           <Menu
             anchorEl={anchorEl}
@@ -148,27 +182,22 @@ const Layout = ({ children }) => {
           >
             <MenuItem onClick={() => navigate('/profile')}>
               <ListItemIcon>
-                <User size={20} />
+                <User size={18} />
               </ListItemIcon>
-              Profile
+              <Typography>Profile</Typography>
             </MenuItem>
-            {user?.user_metadata?.role === 'admin' && (
-              <MenuItem component={Link} to="/admin/admin-dashboard">
-                Admin Dashboard
-              </MenuItem>
-            )}
             <MenuItem onClick={() => navigate('/settings')}>
               <ListItemIcon>
-                <Settings size={20} />
+                <Settings size={18} />
               </ListItemIcon>
-              Settings
+              <Typography>Settings</Typography>
             </MenuItem>
             <Divider />
             <MenuItem onClick={handleSignOut}>
               <ListItemIcon>
-                <LogOut size={20} />
+                <LogOut size={18} />
               </ListItemIcon>
-              Sign out
+              <Typography>Sign Out</Typography>
             </MenuItem>
           </Menu>
         </Toolbar>
@@ -182,13 +211,15 @@ const Layout = ({ children }) => {
           open={mobileOpen}
           onClose={handleDrawerToggle}
           ModalProps={{
-            keepMounted: true, // Better open performance on mobile.
+            keepMounted: true,
           }}
           sx={{
             display: { xs: 'block', sm: 'none' },
             '& .MuiDrawer-paper': {
               boxSizing: 'border-box',
               width: drawerWidth,
+              bgcolor: theme.palette.background.paper,
+              borderRight: `1px solid ${theme.palette.divider}`,
             },
           }}
         >
@@ -201,6 +232,8 @@ const Layout = ({ children }) => {
             '& .MuiDrawer-paper': {
               boxSizing: 'border-box',
               width: drawerWidth,
+              bgcolor: theme.palette.background.paper,
+              borderRight: `1px solid ${theme.palette.divider}`,
             },
           }}
           open
@@ -214,12 +247,11 @@ const Layout = ({ children }) => {
           flexGrow: 1,
           p: 3,
           width: { sm: `calc(100% - ${drawerWidth}px)` },
+          ml: { sm: `${drawerWidth}px` },
           mt: '64px',
-          backgroundColor: theme.palette.background.default,
-          minHeight: 'calc(100vh - 64px)',
         }}
       >
-        {children || <Outlet />}
+        <Outlet />
       </Box>
     </Box>
   );

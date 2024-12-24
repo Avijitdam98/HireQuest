@@ -43,77 +43,94 @@ const Applications = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedApplication, setSelectedApplication] = useState(null);
 
-  useEffect(() => {
-    loadApplications();
-  }, []);
-
   const loadApplications = async () => {
     try {
       setLoading(true);
+      setError(null);
       const data = await api.getAllApplications();
       setApplications(data);
     } catch (err) {
-      setError(err.message);
+      console.error('Error loading applications:', err);
+      setError('Failed to load applications. Please try again later.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleUpdateStatus = async (applicationId, newStatus) => {
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  const handleStatusChange = async (applicationId, newStatus) => {
     try {
       await api.updateApplicationStatus(applicationId, newStatus);
-      setApplications(apps =>
-        apps.map(app =>
-          app.id === applicationId ? { ...app, status: newStatus } : app
-        )
-      );
-      setSelectedApplication(null);
+      await loadApplications(); // Reload the list
     } catch (err) {
-      setError(err.message);
+      console.error('Error updating status:', err);
+      setError('Failed to update application status.');
     }
   };
 
-  const filteredApplications = applications.filter(app => {
-    const matchesSearch = (
-      app.profiles.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      app.jobs.title.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-    const matchesStatus = statusFilter === 'all' || app.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const handleViewApplication = (application) => {
+    setSelectedApplication(application);
+  };
 
-  const paginatedApplications = filteredApplications.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage
-  );
+  const handleCloseDialog = () => {
+    setSelectedApplication(null);
+  };
+
+  useEffect(() => {
+    loadApplications();
+  }, []);
+
+  const filteredApplications = applications
+    .filter((app) => {
+      const matchesSearch = 
+        (app.profile?.full_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (app.job?.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (app.job?.company || '').toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesStatus = statusFilter === 'all' || app.status === statusFilter;
+      
+      return matchesSearch && matchesStatus;
+    });
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
         <CircularProgress />
       </Box>
     );
   }
 
+  if (error) {
+    return (
+      <Box m={2}>
+        <Alert severity="error">{error}</Alert>
+      </Box>
+    );
+  }
+
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" sx={{ mb: 4 }}>
+    <Box p={3}>
+      <Typography variant="h4" gutterBottom>
         Applications Management
       </Typography>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
-      )}
-
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+      <Paper sx={{ mb: 2, p: 2 }}>
+        <Box display="flex" gap={2} mb={2}>
           <TextField
-            fullWidth
-            placeholder="Search by applicant or job title..."
+            label="Search"
+            variant="outlined"
+            size="small"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            sx={{ minWidth: 200 }}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -124,9 +141,12 @@ const Applications = () => {
           />
           <TextField
             select
+            label="Status Filter"
+            variant="outlined"
+            size="small"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            sx={{ minWidth: 200 }}
+            sx={{ minWidth: 150 }}
           >
             <MenuItem value="all">All Status</MenuItem>
             <MenuItem value="pending">Pending</MenuItem>
@@ -141,130 +161,121 @@ const Applications = () => {
             <TableHead>
               <TableRow>
                 <TableCell>Applicant</TableCell>
-                <TableCell>Job Title</TableCell>
-                <TableCell>Applied Date</TableCell>
+                <TableCell>Job Position</TableCell>
+                <TableCell>Company</TableCell>
+                <TableCell>Applied</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {paginatedApplications.map((application) => (
-                <TableRow key={application.id}>
-                  <TableCell>{application.profiles.full_name}</TableCell>
-                  <TableCell>{application.jobs.title}</TableCell>
-                  <TableCell>
-                    {formatDistanceToNow(new Date(application.created_at), { addSuffix: true })}
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={application.status}
-                      color={statusColors[application.status]}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                      <Button
+              {filteredApplications
+                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                .map((application) => (
+                  <TableRow key={application.id}>
+                    <TableCell>{application.profile?.full_name || 'Unknown'}</TableCell>
+                    <TableCell>{application.job?.title || 'N/A'}</TableCell>
+                    <TableCell>{application.job?.company || 'N/A'}</TableCell>
+                    <TableCell>
+                      {formatDistanceToNow(new Date(application.created_at), { addSuffix: true })}
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={application.status}
+                        color={statusColors[application.status]}
                         size="small"
-                        startIcon={<Eye size={16} />}
-                        onClick={() => setSelectedApplication(application)}
-                      >
-                        View
-                      </Button>
-                      <Button
-                        size="small"
-                        startIcon={<Download size={16} />}
-                        href={application.cv_url}
-                        target="_blank"
-                      >
-                        CV
-                      </Button>
-                    </Box>
-                  </TableCell>
-                </TableRow>
-              ))}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Box display="flex" gap={1}>
+                        <Button
+                          startIcon={<Eye size={16} />}
+                          size="small"
+                          onClick={() => handleViewApplication(application)}
+                        >
+                          View
+                        </Button>
+                        {application.cv_url && (
+                          <Button
+                            startIcon={<Download size={16} />}
+                            size="small"
+                            href={application.cv_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            CV
+                          </Button>
+                        )}
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ))}
             </TableBody>
           </Table>
         </TableContainer>
 
         <TablePagination
-          rowsPerPageOptions={[5, 10, 25]}
           component="div"
           count={filteredApplications.length}
-          rowsPerPage={rowsPerPage}
           page={page}
-          onPageChange={(e, newPage) => setPage(newPage)}
-          onRowsPerPageChange={(e) => {
-            setRowsPerPage(parseInt(e.target.value, 10));
-            setPage(0);
-          }}
+          onPageChange={handleChangePage}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
         />
       </Paper>
 
-      {/* Application Details Dialog */}
-      <Dialog
-        open={!!selectedApplication}
-        onClose={() => setSelectedApplication(null)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>
-          Application Details
-        </DialogTitle>
-        <DialogContent dividers>
-          {selectedApplication && (
-            <Box sx={{ p: 2 }}>
-              <Typography variant="subtitle1" gutterBottom>
-                Applicant Information
+      {selectedApplication && (
+        <Dialog open={Boolean(selectedApplication)} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+          <DialogTitle>Application Details</DialogTitle>
+          <DialogContent>
+            <Box p={2}>
+              <Typography variant="h6" gutterBottom>
+                {selectedApplication.job?.title}
               </Typography>
-              <Typography variant="body2" paragraph>
-                Name: {selectedApplication.profiles.full_name}
-                <br />
-                Email: {selectedApplication.profiles.email}
-                <br />
-                Applied: {new Date(selectedApplication.created_at).toLocaleDateString()}
+              <Typography color="textSecondary" gutterBottom>
+                {selectedApplication.job?.company}
               </Typography>
+              
+              <Box mt={3}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Applicant Information
+                </Typography>
+                <Typography>
+                  Name: {selectedApplication.profile?.full_name}
+                </Typography>
+                <Typography>
+                  Email: {selectedApplication.profile?.email}
+                </Typography>
+                <Typography>
+                  Applied: {new Date(selectedApplication.created_at).toLocaleDateString()}
+                </Typography>
+              </Box>
 
-              <Typography variant="subtitle1" gutterBottom>
-                Job Information
-              </Typography>
-              <Typography variant="body2" paragraph>
-                Position: {selectedApplication.jobs.title}
-                <br />
-                Company: {selectedApplication.jobs.company}
-                <br />
-                Location: {selectedApplication.jobs.location}
-              </Typography>
-
-              <Typography variant="subtitle1" gutterBottom>
-                Status
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                {['pending', 'interviewing', 'accepted', 'rejected'].map((status) => (
-                  <Chip
-                    key={status}
-                    label={status}
-                    color={statusColors[status]}
-                    size="small"
-                    onClick={() => handleUpdateStatus(selectedApplication.id, status)}
-                    variant={selectedApplication.status === status ? 'filled' : 'outlined'}
-                  />
-                ))}
+              <Box mt={3}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Status
+                </Typography>
+                <Box display="flex" gap={1}>
+                  {['pending', 'interviewing', 'accepted', 'rejected'].map((status) => (
+                    <Button
+                      key={status}
+                      variant={selectedApplication.status === status ? 'contained' : 'outlined'}
+                      color={statusColors[status]}
+                      size="small"
+                      onClick={() => handleStatusChange(selectedApplication.id, status)}
+                    >
+                      {status.charAt(0).toUpperCase() + status.slice(1)}
+                    </Button>
+                  ))}
+                </Box>
               </Box>
             </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setSelectedApplication(null)}>Close</Button>
-          <Button
-            href={selectedApplication?.cv_url}
-            target="_blank"
-            startIcon={<Download size={16} />}
-          >
-            Download CV
-          </Button>
-        </DialogActions>
-      </Dialog>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseDialog}>Close</Button>
+          </DialogActions>
+        </Dialog>
+      )}
     </Box>
   );
 };

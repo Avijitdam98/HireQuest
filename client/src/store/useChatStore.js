@@ -1,84 +1,134 @@
 import { create } from 'zustand';
-import { getSession } from '../utils/auth';
-
-const WEBSOCKET_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080';
+import { supabase } from '../lib/supabase';
 
 const useChatStore = create((set, get) => ({
-  socket: null,
+  chats: [],
+  currentChat: null,
   messages: [],
-  connected: false,
+  loading: false,
   error: null,
 
-  initializeWebSocket: () => {
-    const session = getSession();
-    const currentSocket = get().socket;
+  setCurrentChat: (chat) => set({ currentChat: chat }),
 
-    // Close existing socket if any
-    if (currentSocket) {
-      currentSocket.close();
-    }
-
+  fetchChats: async (userId) => {
     try {
-      // Only initialize WebSocket for job seekers
-      const userRole = session?.user?.user_metadata?.role;
-      if (userRole !== 'jobseeker') {
-        return;
-      }
+      set({ loading: true, error: null });
+      
+      const { data: userProfile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single();
 
-      const wsUrl = `${WEBSOCKET_URL}/chat?token=${session?.access_token}`;
-      const socket = new WebSocket(wsUrl);
+      const isEmployer = userProfile?.role === 'employer';
+      
+      const { data, error } = await supabase
+        .from('chats')
+        .select(`
+          *,
+          application:applications (
+            id,
+            status,
+            job:jobs (
+              id,
+              title,
+              company
+            )
+          ),
+          employer:profiles!chats_employer_id_fkey (
+            id,
+            full_name,
+            avatar_url
+          ),
+          jobseeker:profiles!chats_jobseeker_id_fkey (
+            id,
+            full_name,
+            avatar_url
+          ),
+          last_message:messages (
+            id,
+            content,
+            created_at,
+            sender_id
+          )
+        `)
+        .eq(isEmployer ? 'employer_id' : 'jobseeker_id', userId)
+        .order('updated_at', { ascending: false });
 
-      socket.onopen = () => {
-        console.log('WebSocket connected');
-        set({ socket, connected: true, error: null });
-      };
+      if (error) throw error;
 
-      socket.onmessage = (event) => {
-        const message = JSON.parse(event.data);
-        set((state) => ({
-          messages: [...state.messages, message],
-        }));
-      };
+      // Sort chats with most recent messages first
+      const sortedChats = data.sort((a, b) => {
+        const aTime = a.last_message?.[0]?.created_at || a.updated_at;
+        const bTime = b.last_message?.[0]?.created_at || b.updated_at;
+        return new Date(bTime) - new Date(aTime);
+      });
 
-      socket.onclose = () => {
-        console.log('WebSocket disconnected');
-        set({ socket: null, connected: false });
-        // Attempt to reconnect after 5 seconds
-        setTimeout(() => {
-          if (!get().connected) {
-            get().initializeWebSocket();
-          }
-        }, 5000);
-      };
-
-      socket.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        set({ error: 'Failed to connect to chat server' });
-      };
-
-      set({ socket });
+      set({ chats: sortedChats || [], loading: false });
     } catch (error) {
-      console.error('Error initializing WebSocket:', error);
-      set({ error: 'Failed to initialize chat connection' });
+      console.error('Error fetching chats:', error);
+      set({ error: error.message, loading: false });
     }
   },
 
-  sendMessage: (message) => {
-    const { socket } = get();
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify(message));
-    } else {
-      console.error('WebSocket is not connected');
+  fetchMessages: async (chatId) => {
+    try {
+      set({ loading: true, error: null });
+      
+      const { data, error } = await supabase
+        .from('messages')
+        .select(`
+          *,
+          sender:profiles (
+            id,
+            full_name,
+            avatar_url,
+            role
+          )
+        `)
+        .eq('chat_id', chatId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      set({ messages: data || [], loading: false });
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      set({ error: error.message, loading: false });
     }
   },
 
-  disconnect: () => {
-    const { socket } = get();
-    if (socket) {
-      socket.close();
+  sendMessage: async (chatId, userId, content) => {
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .insert([
+          {
+            chat_id: chatId,
+            sender_id: userId,
+            content
+          }
+        ])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Update messages state
+      set((state) => ({
+        messages: [...state.messages, data]
+      }));
+
+      return data;
+    } catch (error) {
+      console.error('Error sending message:', error);
+      set({ error: error.message });
     }
-    set({ socket: null, connected: false, messages: [] });
   },
+
+  clearChat: () => {
+    set({ currentChat: null, messages: [] });
+  }
 }));
 
 export default useChatStore;

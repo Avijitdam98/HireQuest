@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Card,
@@ -18,9 +19,12 @@ import {
 } from '@mui/material';
 import { useAuth } from '../../hooks/useAuth';
 import { api } from '../../utils/api';
+import { supabase } from '../../lib/supabase';
+import { MessageSquare } from 'lucide-react';
 
 export default function JobList() {
   const { user, userRole } = useAuth();
+  const navigate = useNavigate();
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -95,6 +99,42 @@ export default function JobList() {
     } catch (err) {
       console.error('Error updating application status:', err);
       setError('Failed to update application status');
+    }
+  };
+
+  const handleChat = async (application) => {
+    try {
+      // Check if chat already exists
+      const { data: existingChat } = await supabase
+        .from('chats')
+        .select('id')
+        .eq('application_id', application.id)
+        .single();
+
+      if (existingChat) {
+        navigate('/chat', { state: { chatId: existingChat.id } });
+        return;
+      }
+
+      // Create new chat
+      const { data: newChat, error } = await supabase
+        .from('chats')
+        .insert([
+          {
+            application_id: application.id,
+            employer_id: user.id,
+            jobseeker_id: application.user_id
+          }
+        ])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      navigate('/chat', { state: { chatId: newChat.id } });
+    } catch (error) {
+      console.error('Error handling chat:', error);
+      setError('Failed to start chat. Please try again.');
     }
   };
 
@@ -181,61 +221,62 @@ export default function JobList() {
                                             Applied: {new Date(application.created_at).toLocaleDateString()}
                                           </Typography>
                                         </Grid>
-                                        <Grid item xs={12} sm={4}>
-                                          {application.cv_url ? (
+                                        <Grid item xs={12} sm={8}>
+                                          <Box display="flex" gap={2} justifyContent="flex-end">
+                                            {application.cv_url && (
+                                              <Button
+                                                variant="outlined"
+                                                color="primary"
+                                                href={application.cv_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                onClick={(e) => {
+                                                  if (!application.cv_url.startsWith('http')) {
+                                                    e.preventDefault();
+                                                    setError('CV file not found or access expired. The applicant may need to reapply.');
+                                                  }
+                                                }}
+                                                disabled={!application.cv_url.startsWith('http')}
+                                              >
+                                                View CV
+                                              </Button>
+                                            )}
                                             <Button
                                               variant="outlined"
                                               color="primary"
-                                              href={application.cv_url}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              onClick={(e) => {
-                                                if (!application.cv_url.startsWith('http')) {
-                                                  e.preventDefault();
-                                                  setError('CV file not found or access expired. The applicant may need to reapply.');
-                                                }
-                                              }}
-                                              disabled={!application.cv_url.startsWith('http')}
+                                              onClick={() => handleChat(application)}
+                                              startIcon={<MessageSquare />}
                                             >
-                                              {application.cv_url.startsWith('http') ? 'View CV' : 'CV Not Accessible'}
+                                              Chat
                                             </Button>
-                                          ) : (
-                                            <Typography variant="body2" color="error">
-                                              CV not available
-                                            </Typography>
-                                          )}
-                                          {error && (
-                                            <Typography variant="body2" color="error" sx={{ mt: 1 }}>
-                                              {error}
-                                            </Typography>
-                                          )}
-                                        </Grid>
-                                        <Grid item xs={12} sm={4}>
-                                          <Box display="flex" gap={1}>
                                             <Button
-                                              variant={application.status === 'accepted' ? 'contained' : 'outlined'}
+                                              variant="contained"
                                               color="success"
                                               onClick={() => handleUpdateStatus(application.id, 'accepted')}
-                                              size="small"
+                                              disabled={application.status === 'accepted'}
                                             >
                                               Accept
                                             </Button>
                                             <Button
-                                              variant={application.status === 'rejected' ? 'contained' : 'outlined'}
+                                              variant="outlined"
                                               color="error"
                                               onClick={() => handleUpdateStatus(application.id, 'rejected')}
-                                              size="small"
+                                              disabled={application.status === 'rejected'}
                                             >
                                               Reject
                                             </Button>
                                           </Box>
-                                          <Typography 
-                                            variant="body2" 
-                                            color="textSecondary"
-                                            sx={{ mt: 1 }}
-                                          >
-                                            Status: {application.status}
-                                          </Typography>
+                                          <Box mt={1}>
+                                            <Chip 
+                                              label={application.status || 'pending'}
+                                              color={
+                                                application.status === 'accepted' ? 'success' :
+                                                application.status === 'rejected' ? 'error' :
+                                                'default'
+                                              }
+                                              variant="outlined"
+                                            />
+                                          </Box>
                                         </Grid>
                                       </Grid>
                                     </CardContent>

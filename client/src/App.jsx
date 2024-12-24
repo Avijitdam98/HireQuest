@@ -16,8 +16,9 @@ import { Box, CircularProgress } from '@mui/material';
 import ErrorBoundary from './components/ErrorBoundary';
 import AdminLayout from './components/layout/AdminLayout';
 import Chat from './pages/chat/Chat';
-import Teams from './pages/teams/Teams';
 import AdminDashboard from './pages/admin/AdminDashboard';
+import { ThemeProvider } from './providers/ThemeProvider';
+import Settings from './pages/settings/Settings';
 
 function App() {
   const { user, loading } = useAuth();
@@ -60,13 +61,59 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <Router>
-        <Routes>
-          {/* Public Routes */}
-          <Route 
-            path="/login" 
-            element={
-              user ? (
+      <ThemeProvider>
+        <Router>
+          <Routes>
+            {/* Public Routes */}
+            <Route 
+              path="/login" 
+              element={
+                user ? (
+                  <Navigate 
+                    to={
+                      isAdmin 
+                        ? "/admin/dashboard"
+                        : isEmployer 
+                          ? "/employer/jobs"
+                          : "/jobs"
+                    } 
+                    replace 
+                  />
+                ) : (
+                  <Login />
+                )
+              } 
+            />
+            
+            <Route 
+              path="/signup" 
+              element={
+                user ? (
+                  <Navigate 
+                    to={
+                      isAdmin 
+                        ? "/admin/dashboard"
+                        : isEmployer 
+                          ? "/employer/jobs"
+                          : "/jobs"
+                    } 
+                    replace 
+                  />
+                ) : (
+                  <SignUp />
+                )
+              } 
+            />
+
+            {/* Protected Routes */}
+            <Route
+              element={
+                <ProtectedRoute>
+                  <Layout />
+                </ProtectedRoute>
+              }
+            >
+              <Route path="/" element={
                 <Navigate 
                   to={
                     isAdmin 
@@ -77,106 +124,62 @@ function App() {
                   } 
                   replace 
                 />
-              ) : (
-                <Login />
-              )
-            } 
-          />
-          
-          <Route 
-            path="/signup" 
-            element={
-              user ? (
+              } />
+
+              {/* Common Routes */}
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/chat" element={<Chat />} />
+
+              {/* Job Seeker Routes */}
+              {isJobSeeker && (
+                <>
+                  <Route path="/jobs" element={<JobList />} />
+                  <Route path="/applications" element={<Applications userView />} />
+                </>
+              )}
+
+              {/* Employer Routes */}
+              {isEmployer && (
+                <>
+                  <Route path="/employer/create-job" element={<CreateJob />} />
+                  <Route path="/employer/jobs" element={<JobList employerView />} />
+                  <Route path="/employer/applications" element={<Applications employerView />} />
+                </>
+              )}
+
+              {/* Admin Routes */}
+              {isAdmin && (
+                <>
+                  <Route path="/admin/dashboard" element={<Dashboard />} />
+                  <Route path="/admin/users" element={<Users />} />
+                  <Route path="/admin/applications" element={<Applications adminView />} />
+                  <Route path="/admin/admin-dashboard" element={<AdminDashboard />} />
+                </>
+              )}
+            </Route>
+
+            {/* Catch-all Route */}
+            <Route 
+              path="*" 
+              element={
                 <Navigate 
                   to={
-                    isAdmin 
-                      ? "/admin/dashboard"
-                      : isEmployer 
-                        ? "/employer/jobs"
-                        : "/jobs"
+                    user 
+                      ? isAdmin 
+                        ? "/admin/dashboard"
+                        : isEmployer 
+                          ? "/employer/jobs"
+                          : "/jobs"
+                      : "/login"
                   } 
                   replace 
                 />
-              ) : (
-                <SignUp />
-              )
-            } 
-          />
-
-          {/* Protected Routes */}
-          <Route
-            element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
-            }
-          >
-            <Route path="/" element={
-              <Navigate 
-                to={
-                  isAdmin 
-                    ? "/admin/dashboard"
-                    : isEmployer 
-                      ? "/employer/jobs"
-                      : "/jobs"
-                } 
-                replace 
-              />
-            } />
-
-            {/* Common Routes */}
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/chat" element={<Chat />} />
-            <Route path="/teams" element={<Teams />} />
-
-            {/* Job Seeker Routes */}
-            {isJobSeeker && (
-              <>
-                <Route path="/jobs" element={<JobList />} />
-                <Route path="/applications" element={<Applications userView />} />
-              </>
-            )}
-
-            {/* Employer Routes */}
-            {isEmployer && (
-              <>
-                <Route path="/employer/create-job" element={<CreateJob />} />
-                <Route path="/employer/jobs" element={<JobList employerView />} />
-                <Route path="/employer/applications" element={<Applications employerView />} />
-              </>
-            )}
-
-            {/* Admin Routes */}
-            {isAdmin && (
-              <>
-                <Route path="/admin/dashboard" element={<Dashboard />} />
-                <Route path="/admin/users" element={<Users />} />
-                <Route path="/admin/applications" element={<Applications adminView />} />
-                <Route path="/admin/admin-dashboard" element={<AdminDashboard />} />
-              </>
-            )}
-          </Route>
-
-          {/* Catch-all Route */}
-          <Route 
-            path="*" 
-            element={
-              <Navigate 
-                to={
-                  user 
-                    ? isAdmin 
-                      ? "/admin/dashboard"
-                      : isEmployer 
-                        ? "/employer/jobs"
-                        : "/jobs"
-                    : "/login"
-                } 
-                replace 
-              />
-            } 
-          />
-        </Routes>
-      </Router>
+              } 
+            />
+          </Routes>
+        </Router>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }

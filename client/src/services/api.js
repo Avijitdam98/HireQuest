@@ -74,21 +74,77 @@ export const api = {
   },
 
   // Profiles
+  profiles: {
+    async getById(userId) {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select()
+          .eq('id', userId)
+          .maybeSingle();
+          
+        if (error) throw error;
+        return data;
+      } catch (error) {
+        console.error('Error in getById:', error);
+        throw error;
+      }
+    },
+
+    async update(userId, updates) {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .update(updates)
+          .eq('id', userId)
+          .select()
+          .maybeSingle();
+          
+        if (error) throw error;
+        return data;
+      } catch (error) {
+        console.error('Error in update:', error);
+        throw error;
+      }
+    },
+
+    async create(userId, profileData) {
+      try {
+        // First check if profile exists
+        const { data: existing } = await supabase
+          .from('profiles')
+          .select()
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (existing) {
+          return existing;
+        }
+
+        const { data, error } = await supabase
+          .from('profiles')
+          .insert([{ 
+            id: userId,
+            ...profileData,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }])
+          .select()
+          .maybeSingle();
+          
+        if (error) throw error;
+        return data;
+      } catch (error) {
+        console.error('Error in create:', error);
+        throw error;
+      }
+    }
+  },
+
   async getProfiles() {
     const { data, error } = await supabase
       .from('profiles')
       .select('*');
-    if (error) throw error;
-    return data;
-  },
-
-  async updateProfile(id, updates) {
-    const { data, error } = await supabase
-      .from('profiles')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
     if (error) throw error;
     return data;
   },

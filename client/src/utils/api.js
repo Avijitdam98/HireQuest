@@ -50,7 +50,6 @@ export const api = {
               // Extract the path from the public URL
               const path = app.cv_url.split('/cvs/')[1];
               if (path) {
-                // Get a signed URL for the CV
                 app.cv_url = await this.getSignedUrl(path);
               }
             }
@@ -67,10 +66,9 @@ export const api = {
       .from('jobs')
       .update(updates)
       .eq('id', id)
-      .select()
-      .single();
+      .select();
     if (error) throw error;
-    return data;
+    return data[0];
   },
 
   async deleteJob(id) {
@@ -83,115 +81,70 @@ export const api = {
 
   // Storage
   async ensureBucketExists(bucketName) {
-    try {
-      // Check if bucket exists
-      const { data: buckets, error: listError } = await supabase.storage.listBuckets();
-      if (listError) throw listError;
-
-      const bucket = buckets?.find(b => b.name === bucketName);
-      if (!bucket) {
-        // Create the bucket if it doesn't exist
-        const { error: createError } = await supabase.storage.createBucket(bucketName, {
-          public: true,
-          fileSizeLimit: 5242880, // 5MB
-        });
-        if (createError) throw createError;
-      }
-      
-      // Update bucket to be public
-      const { error: updateError } = await supabase.storage.updateBucket(bucketName, {
-        public: true,
-        fileSizeLimit: 5242880,
+    const { data: buckets } = await supabase.storage.listBuckets();
+    const bucketExists = buckets?.some(bucket => bucket.name === bucketName);
+    
+    if (!bucketExists) {
+      const { error } = await supabase.storage.createBucket(bucketName, {
+        public: false,
+        fileSizeLimit: 1024 * 1024 * 10, // 10MB
+        allowedMimeTypes: ['application/pdf']
       });
-      if (updateError) throw updateError;
-
-      return true;
-    } catch (error) {
-      console.error('Error ensuring bucket exists:', error);
-      throw error;
+      if (error) throw error;
     }
   },
 
   async getSignedUrl(path) {
-    try {
-      // First try to create a signed URL
-      const { data, error } = await supabase.storage
-        .from('cvs')
-        .createSignedUrl(path, 365 * 24 * 60 * 60); // 1 year validity
-
-      if (error) {
-        console.error('Error creating signed URL:', error);
-        // Fallback to public URL if signed URL fails
-        const { data: { publicUrl } } = supabase.storage
-          .from('cvs')
-          .getPublicUrl(path);
-        return publicUrl;
-      }
-
-      return data.signedUrl;
-    } catch (error) {
-      console.error('Error getting signed URL:', error);
-      return null;
-    }
+    const { data, error } = await supabase.storage
+      .from('cvs')
+      .createSignedUrl(path, 3600); // 1 hour expiry
+    
+    if (error) throw error;
+    return data.signedUrl;
   },
 
   // Applications
   async applyForJob(jobId, cvFile, coverLetter = '') {
     const { data: { user } } = await supabase.auth.getUser();
     
-    try {
-      // Ensure CV storage bucket exists
-      await this.ensureBucketExists('cvs');
+    // Ensure the CVs bucket exists
+    await this.ensureBucketExists('cvs');
+    
+    // Upload CV file
+    const timestamp = new Date().getTime();
+    const fileName = `${user.id}_${timestamp}_${cvFile.name}`;
+    const { error: uploadError } = await supabase.storage
+      .from('cvs')
+      .upload(fileName, cvFile);
+    
+    if (uploadError) throw uploadError;
 
-      // Generate file path
-      const timestamp = new Date().getTime();
-      const fileExt = cvFile.name.split('.').pop();
-      const cvFileName = `${user.id}/${timestamp}.${fileExt}`;
-      
-      // Upload the CV file
-      const { error: uploadError, data: uploadData } = await supabase.storage
+    // Get the public URL for the uploaded file
+    const { data: { publicUrl } } = supabase.storage
+      .from('cvs')
+      .getPublicUrl(fileName);
+
+    // Create the application record
+    const { data: application, error: applicationError } = await supabase
+      .from('applications')
+      .insert([{
+        job_id: jobId,
+        user_id: user.id,
+        cv_url: publicUrl,
+        cover_letter: coverLetter,
+      }])
+      .select()
+      .single();
+
+    if (applicationError) {
+      // If application creation fails, delete the uploaded file
+      await supabase.storage
         .from('cvs')
-        .upload(cvFileName, cvFile, {
-          cacheControl: '3600',
-          upsert: true
-        });
-      
-      if (uploadError) {
-        console.error('Error uploading CV:', uploadError);
-        throw uploadError;
-      }
-
-      // Get the public URL using the signed URL for better security
-      const { data: urlData, error: urlError } = await supabase.storage
-        .from('cvs')
-        .createSignedUrl(cvFileName, 365 * 24 * 60 * 60); // Valid for 1 year
-
-      if (urlError) {
-        console.error('Error getting signed URL:', urlError);
-        throw urlError;
-      }
-
-      // Create the application
-      const { data, error } = await supabase
-        .from('applications')
-        .insert([{
-          job_id: jobId,
-          user_id: user.id,
-          cv_url: urlData.signedUrl,
-          status: 'pending'
-        }])
-        .select();
-
-      if (error) {
-        console.error('Error creating application:', error);
-        throw error;
-      }
-
-      return data[0];
-    } catch (error) {
-      console.error('Error in applyForJob:', error);
-      throw new Error(error.message || 'Failed to apply for job');
+        .remove([fileName]);
+      throw applicationError;
     }
+
+    return application;
   },
 
   async getUserApplications() {
@@ -200,16 +153,43 @@ export const api = {
       .from('applications')
       .select(`
         *,
-        job:jobs(
-          id,
-          title,
-          company,
-          location
-        )
+        job:jobs(*)
       `)
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
+    
     if (error) throw error;
+    return data;
+  },
+
+  async getAllApplications() {
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data, error } = await supabase
+      .from('applications')
+      .select(`
+        *,
+        job:jobs!inner(*),
+        applicant:profiles!applications_user_id_fkey(*)
+      `)
+      .eq('jobs.employer_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    // Process CV URLs to get signed URLs
+    for (const app of data) {
+      if (app.cv_url) {
+        // Check if the URL is already a signed URL
+        if (!app.cv_url.includes('token=')) {
+          // Extract the path from the public URL
+          const path = app.cv_url.split('/cvs/')[1];
+          if (path) {
+            app.cv_url = await this.getSignedUrl(path);
+          }
+        }
+      }
+    }
+
     return data;
   },
 
@@ -218,13 +198,99 @@ export const api = {
       .from('applications')
       .update({ status })
       .eq('id', applicationId)
-      .select()
-      .single();
+      .select();
     if (error) throw error;
-    return data;
+    return data[0];
   },
 
   // Profiles
+  profiles: {
+    async getById(id) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error in getById:', error);
+        throw error;
+      }
+
+      return data;
+    },
+
+    async create(id, profileData) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .insert([
+          {
+            id,
+            user_id: id,
+            full_name: profileData.full_name,
+            email: profileData.email,
+            phone: profileData.phone,
+            headline: profileData.headline,
+            bio: profileData.bio,
+            company_name: profileData.company_name,
+            company_website: profileData.company_website,
+            company_size: profileData.company_size,
+            industry: profileData.industry,
+            location: profileData.location,
+            skills: profileData.skills,
+            experience: profileData.experience,
+            education: profileData.education,
+            avatar_url: profileData.avatar_url,
+            role: profileData.role,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }
+        ])
+        .select()
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error in create:', error);
+        throw error;
+      }
+
+      return data;
+    },
+
+    async update(id, profileData) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: profileData.full_name,
+          email: profileData.email,
+          phone: profileData.phone,
+          headline: profileData.headline,
+          bio: profileData.bio,
+          company_name: profileData.company_name,
+          company_website: profileData.company_website,
+          company_size: profileData.company_size,
+          industry: profileData.industry,
+          location: profileData.location,
+          skills: profileData.skills,
+          experience: profileData.experience,
+          education: profileData.education,
+          avatar_url: profileData.avatar_url,
+          role: profileData.role,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select()
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error in update:', error);
+        throw error;
+      }
+
+      return data;
+    }
+  },
+
   async getProfile() {
     const { data: { user } } = await supabase.auth.getUser();
     const { data, error } = await supabase
@@ -242,35 +308,30 @@ export const api = {
       .from('profiles')
       .update(updates)
       .eq('id', user.id)
-      .select()
-      .single();
+      .select();
     if (error) throw error;
-    return data;
+    return data[0];
   },
 
   async uploadProfilePicture(file) {
     const { data: { user } } = await supabase.auth.getUser();
-    const timestamp = new Date().getTime();
+    
+    // Ensure avatars bucket exists
+    await this.ensureBucketExists('avatars');
+    
     const fileExt = file.name.split('.').pop();
-    const fileName = `${user.id}/${timestamp}.${fileExt}`;
-
+    const fileName = `${user.id}.${fileExt}`;
+    
     const { error: uploadError } = await supabase.storage
       .from('avatars')
-      .upload(fileName, file);
+      .upload(fileName, file, { upsert: true });
+    
     if (uploadError) throw uploadError;
-
+    
     const { data: { publicUrl } } = supabase.storage
       .from('avatars')
       .getPublicUrl(fileName);
-
-    // Update profile with new avatar URL
-    const { data, error } = await supabase
-      .from('profiles')
-      .update({ avatar_url: publicUrl })
-      .eq('id', user.id)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
+    
+    return publicUrl;
   },
 };

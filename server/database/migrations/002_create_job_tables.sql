@@ -3,7 +3,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Create profiles table
 CREATE TABLE IF NOT EXISTS profiles (
-    id UUID REFERENCES auth.users(id) PRIMARY KEY,
+    id UUID PRIMARY KEY,
     full_name TEXT,
     email TEXT,
     phone TEXT,
