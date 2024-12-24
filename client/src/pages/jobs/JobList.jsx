@@ -16,15 +16,11 @@ import {
   CircularProgress,
   Alert,
   IconButton,
-  Stack,
-  Collapse
 } from '@mui/material';
 import { useAuth } from '../../hooks/useAuth';
-import { api } from '../../services/api';
+import { api } from '../../utils/api';
 import { supabase } from '../../lib/supabase';
 import { MessageSquare } from 'lucide-react';
-import useApplicationStore from '../../store/useApplicationStore';
-import { FileText, Check, X } from 'lucide-react';
 
 export default function JobList() {
   const { user, userRole } = useAuth();
@@ -38,52 +34,22 @@ export default function JobList() {
   const [applying, setApplying] = useState(false);
   const [applicationError, setApplicationError] = useState(null);
   const [expandedJobId, setExpandedJobId] = useState(null);
-  const [successMessage, setSuccessMessage] = useState(null);
-
-  const { 
-    applications, 
-    loadApplications,
-    initializeSubscription,
-    cleanup, 
-    submitApplication,
-    loading: applicationsLoading,
-    error: applicationsError 
-  } = useApplicationStore();
 
   useEffect(() => {
     loadJobs();
-    if (userRole === 'admin' || userRole === 'employer') {
-      console.log('Loading applications for role:', userRole);
-      loadApplications();
-      initializeSubscription();
-    }
-    return () => {
-      if (userRole === 'admin' || userRole === 'employer') {
-        cleanup();
-      }
-    };
   }, [userRole]);
 
   const loadJobs = async () => {
     try {
       setLoading(true);
-      setError(null);
-      
-      let jobsData;
-      if (userRole === 'employer') {
-        console.log('Loading employer jobs');
-        jobsData = await api.getEmployerJobs();
-      } else {
-        console.log('Loading all jobs');
-        jobsData = await api.getJobs();
-      }
-      
+      const jobsData = userRole === 'employer' 
+        ? await api.getEmployerJobs()
+        : await api.getJobs();
       console.log('Loaded jobs:', jobsData);
-      setJobs(jobsData || []);
+      setJobs(jobsData);
     } catch (err) {
       console.error('Error loading jobs:', err);
-      setError(err.message || 'Failed to load jobs. Please try again later.');
-      setJobs([]);
+      setError('Failed to load jobs. Please try again later.');
     } finally {
       setLoading(false);
     }
@@ -113,36 +79,14 @@ export default function JobList() {
 
     try {
       setApplying(true);
-      setApplicationError(null);
-      
-      // Validate file size (max 10MB)
-      const MAX_FILE_SIZE = 10 * 1024 * 1024;
-      if (cvFile.size > MAX_FILE_SIZE) {
-        setApplicationError('CV file size must be less than 10MB');
-        return;
-      }
-
-      // Validate file type
-      const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-      if (!allowedTypes.includes(cvFile.type)) {
-        setApplicationError('Please upload a PDF or Word document');
-        return;
-      }
-
-      // Submit application using the store
-      await submitApplication(selectedJob.id, cvFile);
-      
-      // Clear form and show success
+      await api.applyForJob(selectedJob.id, cvFile);
       setApplyDialogOpen(false);
       setSelectedJob(null);
       setCvFile(null);
-      
-      // Show success message
-      alert('Application submitted successfully!');
-      
-    } catch (error) {
-      console.error('Application error:', error);
-      setApplicationError(error.message || 'Failed to submit application. Please try again.');
+      loadJobs();
+    } catch (err) {
+      console.error('Error applying for job:', err);
+      setApplicationError('Failed to submit application. Please try again.');
     } finally {
       setApplying(false);
     }
@@ -151,11 +95,9 @@ export default function JobList() {
   const handleUpdateStatus = async (applicationId, newStatus) => {
     try {
       await api.updateApplicationStatus(applicationId, newStatus);
-      // Refresh the jobs list to show updated status
       loadJobs();
-      setSuccessMessage(`Application ${newStatus} successfully`);
-    } catch (error) {
-      console.error('Error updating application status:', error);
+    } catch (err) {
+      console.error('Error updating application status:', err);
       setError('Failed to update application status');
     }
   };
@@ -200,99 +142,7 @@ export default function JobList() {
     setExpandedJobId(expandedJobId === jobId ? null : jobId);
   };
 
-  const renderApplications = (jobId) => {
-    if (userRole !== 'admin' && userRole !== 'employer') {
-      return null;
-    }
-
-    console.log('Rendering applications for job:', jobId);
-    
-    let jobApplications = [];
-    if (userRole === 'employer') {
-      const job = jobs.find(j => j.id === jobId);
-      jobApplications = job?.applications || [];
-      console.log('Employer job applications:', jobApplications);
-    } else {
-      jobApplications = applications[jobId] || [];
-      console.log('Admin job applications:', jobApplications);
-    }
-
-    return (
-      <Box mt={2}>
-        {jobApplications.length === 0 ? (
-          <Typography color="textSecondary">No applications yet</Typography>
-        ) : (
-          <>
-            <Typography variant="h6">Applications ({jobApplications.length})</Typography>
-            {jobApplications.map((app) => {
-              console.log('Rendering application:', app);
-              const applicant = app.user || app.user_profile;
-              return (
-                <Card key={app.id} sx={{ mt: 2, p: 2 }}>
-                  <Stack spacing={2}>
-                    <Box>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                        Applicant: {applicant?.full_name || 'Unknown'}
-                      </Typography>
-                      <Typography 
-                        variant="subtitle2" 
-                        color="text.secondary"
-                      >
-                        Status: {app.status || 'pending'}
-                      </Typography>
-                    </Box>
-
-                    <Stack direction="row" spacing={2} alignItems="center">
-                      {app.cv_url && (
-                        <Button 
-                          variant="outlined" 
-                          size="small"
-                          href={app.cv_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          startIcon={<FileText />}
-                        >
-                          View CV
-                        </Button>
-                      )}
-                      
-                      <Button
-                        variant="contained"
-                        color="success"
-                        size="small"
-                        onClick={() => handleUpdateStatus(app.id, 'accepted')}
-                        disabled={app.status === 'accepted'}
-                        startIcon={<Check />}
-                      >
-                        Accept
-                      </Button>
-                      
-                      <Button
-                        variant="contained"
-                        color="error"
-                        size="small"
-                        onClick={() => handleUpdateStatus(app.id, 'rejected')}
-                        disabled={app.status === 'rejected'}
-                        startIcon={<X />}
-                      >
-                        Reject
-                      </Button>
-                    </Stack>
-
-                    <Typography variant="caption" color="text.secondary">
-                      Applied: {new Date(app.created_at).toLocaleDateString()}
-                    </Typography>
-                  </Stack>
-                </Card>
-              );
-            })}
-          </>
-        )}
-      </Box>
-    );
-  };
-
-  if (loading || applicationsLoading) {
+  if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
         <CircularProgress />
@@ -300,10 +150,10 @@ export default function JobList() {
     );
   }
 
-  if (error || applicationsError) {
+  if (error) {
     return (
       <Box m={2}>
-        <Alert severity="error">{error || applicationsError}</Alert>
+        <Alert severity="error">{error}</Alert>
       </Box>
     );
   }
@@ -317,102 +167,144 @@ export default function JobList() {
       <Grid container spacing={3}>
         {jobs.map((job) => (
           <Grid item xs={12} key={job.id}>
-            <Card 
-              sx={{ 
-                p: 3,
-                bgcolor: 'background.paper',
-                borderRadius: 2,
-                boxShadow: 1,
-                '&:hover': {
-                  boxShadow: 2,
-                  transform: 'translateY(-2px)',
-                  transition: 'all 0.2s ease-in-out'
-                }
-              }}
-            >
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="h5" component="h2" gutterBottom>
-                  {job.title}
-                </Typography>
-                <Typography 
-                  variant="subtitle1" 
-                  color="text.secondary" 
-                  gutterBottom
-                >
-                  {job.company} • {job.location}
-                </Typography>
-              </Box>
+            <Card>
+              <CardContent>
+                <Grid container spacing={2}>
+                  <Grid item xs={12}>
+                    <Box>
+                      <Typography variant="h6">{job.title}</Typography>
+                      <Typography variant="subtitle1" color="textSecondary">
+                        {job.company} • {job.location}
+                      </Typography>
+                    </Box>
 
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="body1">
-                  {job.description}
-                </Typography>
-              </Box>
+                    <Typography variant="body1" paragraph sx={{ mt: 2 }}>
+                      {job.description}
+                    </Typography>
 
-              <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
-                <Chip 
-                  label={job.type} 
-                  size="small" 
-                  sx={{ 
-                    bgcolor: 'primary.main',
-                    color: 'primary.contrastText'
-                  }} 
-                />
-                <Chip 
-                  label={job.salary_range} 
-                  size="small"
-                  sx={{ 
-                    bgcolor: 'secondary.main',
-                    color: 'secondary.contrastText'
-                  }} 
-                />
-                {userRole === 'employer' && job.applications?.length > 0 && (
-                  <Chip 
-                    label={`${job.applications.length} application${job.applications.length === 1 ? '' : 's'}`}
-                    size="small"
-                    sx={{ 
-                      bgcolor: 'background.alt',
-                      color: 'text.primary'
-                    }}
-                  />
-                )}
-              </Stack>
+                    <Box display="flex" gap={1} mb={2}>
+                      <Chip label={job.type} color="primary" variant="outlined" />
+                      <Chip label={job.salary_range} color="secondary" variant="outlined" />
+                      {userRole === 'employer' && job.applications?.length > 0 && (
+                        <Chip 
+                          label={`${job.applications.length} application${job.applications.length === 1 ? '' : 's'}`}
+                          color="info"
+                          variant="outlined"
+                        />
+                      )}
+                    </Box>
 
-              {userRole === 'employer' ? (
-                // For employers: Show applications section
-                job.applications?.length > 0 ? (
-                  <>
-                    <Button
-                      variant="outlined"
-                      color="primary"
-                      onClick={() => toggleJobExpand(job.id)}
-                      sx={{ mb: 2 }}
-                    >
-                      {expandedJobId === job.id ? 'Hide Applications' : 'View Applications'}
-                    </Button>
-                    
-                    <Collapse in={expandedJobId === job.id}>
-                      {renderApplications(job.id)}
-                    </Collapse>
-                  </>
-                ) : (
-                  <Typography variant="body2" color="textSecondary">
-                    No applications yet
-                  </Typography>
-                )
-              ) : userRole === 'jobseeker' ? (
-                // For job seekers: Show apply button
-                <Button
-                  variant="contained"
-                  color="primary"
-                  onClick={() => handleApply(job)}
-                  sx={{ mt: 2 }}
-                >
-                  Apply Now
-                </Button>
-              ) : userRole === 'admin' ? (
-                renderApplications(job.id)
-              ) : null}
+                    {userRole === 'employer' ? (
+                      // For employers: Show applications section
+                      job.applications?.length > 0 ? (
+                        <>
+                          <Button
+                            variant="outlined"
+                            onClick={() => toggleJobExpand(job.id)}
+                            sx={{ mb: 2 }}
+                          >
+                            {expandedJobId === job.id ? 'Hide' : 'View'} Applications ({job.applications.length})
+                          </Button>
+                          
+                          {expandedJobId === job.id && (
+                            <Grid container spacing={2}>
+                              {job.applications.map((application) => (
+                                <Grid item xs={12} key={application.id}>
+                                  <Card variant="outlined">
+                                    <CardContent>
+                                      <Grid container spacing={2} alignItems="center">
+                                        <Grid item xs={12} sm={4}>
+                                          <Typography variant="subtitle1">
+                                            Applicant ID: {application.user_id}
+                                          </Typography>
+                                          <Typography variant="body2" color="textSecondary">
+                                            Applied: {new Date(application.created_at).toLocaleDateString()}
+                                          </Typography>
+                                        </Grid>
+                                        <Grid item xs={12} sm={8}>
+                                          <Box display="flex" gap={2} justifyContent="flex-end">
+                                            {application.cv_url && (
+                                              <Button
+                                                variant="outlined"
+                                                color="primary"
+                                                href={application.cv_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                onClick={(e) => {
+                                                  if (!application.cv_url.startsWith('http')) {
+                                                    e.preventDefault();
+                                                    setError('CV file not found or access expired. The applicant may need to reapply.');
+                                                  }
+                                                }}
+                                                disabled={!application.cv_url.startsWith('http')}
+                                              >
+                                                View CV
+                                              </Button>
+                                            )}
+                                            <Button
+                                              variant="outlined"
+                                              color="primary"
+                                              onClick={() => handleChat(application)}
+                                              startIcon={<MessageSquare />}
+                                            >
+                                              Chat
+                                            </Button>
+                                            <Button
+                                              variant="contained"
+                                              color="success"
+                                              onClick={() => handleUpdateStatus(application.id, 'accepted')}
+                                              disabled={application.status === 'accepted'}
+                                            >
+                                              Accept
+                                            </Button>
+                                            <Button
+                                              variant="outlined"
+                                              color="error"
+                                              onClick={() => handleUpdateStatus(application.id, 'rejected')}
+                                              disabled={application.status === 'rejected'}
+                                            >
+                                              Reject
+                                            </Button>
+                                          </Box>
+                                          <Box mt={1}>
+                                            <Chip 
+                                              label={application.status || 'pending'}
+                                              color={
+                                                application.status === 'accepted' ? 'success' :
+                                                application.status === 'rejected' ? 'error' :
+                                                'default'
+                                              }
+                                              variant="outlined"
+                                            />
+                                          </Box>
+                                        </Grid>
+                                      </Grid>
+                                    </CardContent>
+                                  </Card>
+                                </Grid>
+                              ))}
+                            </Grid>
+                          )}
+                        </>
+                      ) : (
+                        <Typography variant="body2" color="textSecondary">
+                          No applications yet
+                        </Typography>
+                      )
+                    ) : userRole === 'jobseeker' ? (
+                      // For job seekers: Show apply button
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        onClick={() => handleApply(job)}
+                        sx={{ mt: 2 }}
+                      >
+                        Apply Now
+                      </Button>
+                    ) : null}
+                  </Grid>
+                </Grid>
+              </CardContent>
             </Card>
           </Grid>
         ))}
@@ -430,7 +322,7 @@ export default function JobList() {
           
           <Box mt={2}>
             <input
-              accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              accept="application/pdf"
               style={{ display: 'none' }}
               id="cv-file"
               type="file"
@@ -438,7 +330,7 @@ export default function JobList() {
             />
             <label htmlFor="cv-file">
               <Button variant="outlined" component="span">
-                Upload CV (PDF or Word)
+                Upload CV (PDF)
               </Button>
             </label>
             {cvFile && (

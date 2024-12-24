@@ -7,31 +7,8 @@ const useChatStore = create((set, get) => ({
   messages: [],
   loading: false,
   error: null,
-  socket: null,
 
   setCurrentChat: (chat) => set({ currentChat: chat }),
-
-  initializeWebSocket: () => {
-    const { socket } = get();
-    if (socket) {
-      socket.unsubscribe();
-    }
-
-    const newSocket = supabase.channel('chat');
-    
-    newSocket
-      .on('broadcast', { event: 'message' }, ({ payload }) => {
-        const { messages } = get();
-        set({ messages: [...messages, payload] });
-      })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('Connected to chat channel');
-        }
-      });
-
-    set({ socket: newSocket });
-  },
 
   fetchChats: async (userId) => {
     try {

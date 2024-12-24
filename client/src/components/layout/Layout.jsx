@@ -112,15 +112,15 @@ const Layout = ({ children }) => {
                 setMobileOpen(false);
               }}
               sx={{
-                color: 'text.primary',
+                color: theme.palette.text.primary,
                 '&:hover': {
-                  bgcolor: 'background.alt',
+                  bgcolor: theme.palette.action.hover,
                 },
               }}
             >
               <ListItemIcon 
                 sx={{ 
-                  color: mode === 'dark' ? 'primary.light' : 'primary.main',
+                  color: theme.palette.primary.main,
                   minWidth: 40,
                 }}
               >
@@ -128,11 +128,10 @@ const Layout = ({ children }) => {
               </ListItemIcon>
               <ListItemText 
                 primary={item.text} 
-                primaryTypographyProps={{
-                  sx: {
-                    color: 'text.primary',
-                    fontWeight: 500
-                  }
+                sx={{
+                  '& .MuiTypography-root': {
+                    color: theme.palette.text.primary,
+                  },
                 }}
               />
             </ListItemButton>
@@ -214,7 +213,6 @@ const Layout = ({ children }) => {
           ModalProps={{
             keepMounted: true,
           }}
-          elevation={0}
           sx={{
             display: { xs: 'block', sm: 'none' },
             '& .MuiDrawer-paper': {
@@ -229,7 +227,6 @@ const Layout = ({ children }) => {
         </Drawer>
         <Drawer
           variant="permanent"
-          elevation={0}
           sx={{
             display: { xs: 'none', sm: 'block' },
             '& .MuiDrawer-paper': {
@@ -252,8 +249,6 @@ const Layout = ({ children }) => {
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           ml: { sm: `${drawerWidth}px` },
           mt: '64px',
-          bgcolor: 'background.default',
-          minHeight: '100vh'
         }}
       >
         <Outlet />
