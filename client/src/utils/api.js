@@ -89,16 +89,33 @@ export const api = {
 
   // Storage
   async ensureBucketExists(bucketName) {
-    const { data: buckets } = await supabase.storage.listBuckets();
-    const bucketExists = buckets?.some(bucket => bucket.name === bucketName);
-    
-    if (!bucketExists) {
-      const { error } = await supabase.storage.createBucket(bucketName, {
-        public: false,
-        fileSizeLimit: 1024 * 1024 * 10, // 10MB
-        allowedMimeTypes: ['application/pdf']
-      });
-      if (error) throw error;
+    try {
+      // First check if bucket exists
+      const { data: buckets, error: listError } = await supabase.storage.listBuckets();
+      
+      if (listError) {
+        console.error('Error listing buckets:', listError);
+        return; // Continue even if we can't list buckets
+      }
+
+      const bucketExists = buckets?.some(bucket => bucket.name === bucketName);
+      
+      if (!bucketExists) {
+        // Try to create bucket
+        const { error: createError } = await supabase.storage.createBucket(bucketName, {
+          public: true,
+          allowedMimeTypes: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+          fileSizeLimit: 10485760 // 10MB
+        });
+        
+        if (createError) {
+          console.error('Error creating bucket:', createError);
+          // Continue even if bucket creation fails - it might already exist
+        }
+      }
+    } catch (error) {
+      console.error('Error in ensureBucketExists:', error);
+      // Continue even if there's an error - the bucket might already exist
     }
   },
 
@@ -112,47 +129,33 @@ export const api = {
   },
 
   // Applications
-  async applyForJob(jobId, cvFile, coverLetter = '') {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    // Ensure the CVs bucket exists
-    await this.ensureBucketExists('cvs');
-    
-    // Upload CV file
-    const timestamp = new Date().getTime();
-    const fileName = `${user.id}_${timestamp}_${cvFile.name}`;
-    const { error: uploadError } = await supabase.storage
-      .from('cvs')
-      .upload(fileName, cvFile);
-    
-    if (uploadError) throw uploadError;
+  async applyForJob(jobId, cvUrl, coverLetter = '') {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
 
-    // Get the public URL for the uploaded file
-    const { data: { publicUrl } } = supabase.storage
-      .from('cvs')
-      .getPublicUrl(fileName);
+      // Create application record
+      const { data: application, error: applicationError } = await supabase
+        .from('applications')
+        .insert([{
+          job_id: jobId,
+          user_id: user.id,
+          cv_url: cvUrl,
+          cover_letter: coverLetter,
+          status: 'pending'
+        }])
+        .select()
+        .single();
 
-    // Create the application record
-    const { data: application, error: applicationError } = await supabase
-      .from('applications')
-      .insert([{
-        job_id: jobId,
-        user_id: user.id,
-        cv_url: publicUrl,
-        cover_letter: coverLetter,
-      }])
-      .select()
-      .single();
+      if (applicationError) {
+        throw applicationError;
+      }
 
-    if (applicationError) {
-      // If application creation fails, delete the uploaded file
-      await supabase.storage
-        .from('cvs')
-        .remove([fileName]);
-      throw applicationError;
+      return application;
+    } catch (error) {
+      console.error('Error in applyForJob:', error);
+      throw error;
     }
-
-    return application;
   },
 
   async getUserApplications() {
