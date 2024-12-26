@@ -5,6 +5,7 @@ import { ThemeToggle } from '../ui/ThemeToggle';
 import WorkIcon from '@mui/icons-material/Work';
 import GroupsIcon from '@mui/icons-material/Groups';
 import ChatIcon from '@mui/icons-material/Chat';
+import logo from '../../assets/logo.svg';
 
 const Navbar = () => {
   const theme = useTheme();
@@ -19,10 +20,19 @@ const Navbar = () => {
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <div className="flex items-center gap-8">
           <Link to="/" className="flex items-center gap-2">
+            <img 
+              src={logo} 
+              alt="HireQuest Logo" 
+              className="h-8 w-8 object-contain"
+              style={{ 
+                filter: isDarkMode ? 'brightness(1.2)' : 'none',
+                marginTop: '2px'
+              }}
+            />
             <span className={`text-xl font-bold ${
-              isDarkMode ? 'text-white' : 'text-[#0A66C2]'
+              isDarkMode ? 'text-white' : 'text-[#2563EB]'
             }`}>
-              SkillMatch
+              HireQuest
             </span>
           </Link>
           <nav className="hidden md:flex items-center gap-6">

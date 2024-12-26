@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Circle -->
+  <circle cx="100" cy="100" r="90" fill="#2563EB"/>
+  
+  <!-- H letter stylized with connection dots -->
+  <path d="M60 50h15v40h50V50h15v100h-15v-45h-50v45h-15V50z" fill="white"/>
+  
+  <!-- Connection dots representing hiring/networking -->
+  <circle cx="50" cy="40" r="5" fill="#34D399"/>
+  <circle cx="150" cy="40" r="5" fill="#34D399"/>
+  <circle cx="50" cy="160" r="5" fill="#34D399"/>
+  <circle cx="150" cy="160" r="5" fill="#34D399"/>
+  
+  <!-- Connection lines -->
+  <path d="M55 43l90-0.5M55 157l90-0.5" stroke="#34D399" stroke-width="2"/>
+</svg>

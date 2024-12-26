@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Main Circle -->
+  <circle cx="16" cy="16" r="15" fill="#0A66C2"/>
+  
+  <!-- H Letter -->
+  <path d="M11 8h3v6h4V8h3v16h-3v-7h-4v7h-3V8z" fill="white"/>
+  
+  <!-- Decorative Elements -->
+  <circle cx="8" cy="8" r="1.5" fill="#70B5F9"/>
+  <circle cx="24" cy="8" r="1.5" fill="#70B5F9"/>
+  <circle cx="8" cy="24" r="1.5" fill="#70B5F9"/>
+  <circle cx="24" cy="24" r="1.5" fill="#70B5F9"/>
+  
+  <!-- Connecting Lines -->
+  <path d="M9.5 8.5h13M9.5 23.5h13" stroke="#70B5F9" stroke-width="1"/>
+</svg>

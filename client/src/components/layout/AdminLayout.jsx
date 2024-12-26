@@ -1,5 +1,5 @@
-import React from 'react';
-import { Outlet } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
   Drawer,
@@ -14,6 +14,7 @@ import {
   ListItemIcon,
   ListItemText,
   useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -24,256 +25,180 @@ import {
   Settings,
   LogOut,
 } from 'lucide-react';
-import { styled } from '@mui/material/styles';
-import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import logo from '../../assets/logo.svg';
 
 const drawerWidth = 240;
 
-const Main = styled('main', { shouldForwardProp: (prop) => prop !== 'open' })(
-  ({ theme, open }) => ({
-    flexGrow: 1,
-    padding: theme.spacing(3),
-    transition: theme.transitions.create('margin', {
-      easing: theme.transitions.easing.sharp,
-      duration: theme.transitions.duration.leavingScreen,
-    }),
-    marginLeft: `-${drawerWidth}px`,
-    ...(open && {
-      transition: theme.transitions.create('margin', {
-        easing: theme.transitions.easing.easeOut,
-        duration: theme.transitions.duration.enteringScreen,
-      }),
-      marginLeft: 0,
-    }),
-  })
-);
-
-const StyledAppBar = styled(AppBar, {
-  shouldForwardProp: (prop) => prop !== 'open',
-})(({ theme, open }) => ({
-  transition: theme.transitions.create(['margin', 'width'], {
-    easing: theme.transitions.easing.sharp,
-    duration: theme.transitions.duration.leavingScreen,
-  }),
-  ...(open && {
-    width: `calc(100% - ${drawerWidth}px)`,
-    marginLeft: `${drawerWidth}px`,
-    transition: theme.transitions.create(['margin', 'width'], {
-      easing: theme.transitions.easing.easeOut,
-      duration: theme.transitions.duration.enteringScreen,
-    }),
-  }),
-}));
-
-const DrawerHeader = styled('div')(({ theme }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  padding: theme.spacing(0, 1),
-  ...theme.mixins.toolbar,
-  justifyContent: 'flex-end',
-}));
-
-export default function AdminLayout() {
+const AdminLayout = () => {
   const theme = useTheme();
-  const [open, setOpen] = useState(true);
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [open, setOpen] = useState(!isMobile);
   const navigate = useNavigate();
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { logout } = useAuth();
 
   const menuItems = [
-    { text: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin' },
-    { text: 'Users', icon: <Users size={20} />, path: '/admin/users' },
-    {
-      text: 'Applications',
-      icon: <FileText size={20} />,
-      path: '/admin/applications',
-    },
-    { text: 'Settings', icon: <Settings size={20} />, path: '/admin/settings' },
+    { text: 'Home', icon: <LayoutDashboard size={20} />, path: '/admin' },
+    { text: 'Jobs', icon: <FileText size={20} />, path: '/admin/jobs' },
+    { text: 'Post Job', icon: <FileText size={20} />, path: '/admin/post-job' },
+    { text: 'Applications', icon: <FileText size={20} />, path: '/admin/applications' },
+    { text: 'Messages', icon: <FileText size={20} />, path: '/admin/messages' },
+    { text: 'Profile', icon: <Users size={20} />, path: '/admin/profile' },
   ];
-
-  const handleDrawerOpen = () => {
-    setOpen(true);
-  };
-
-  const handleDrawerClose = () => {
-    setOpen(false);
-  };
-
-  const handleNavigation = (path) => {
-    navigate(path);
-  };
-
-  const handleLogout = async () => {
-    try {
-      await signOut();
-      navigate('/login');
-    } catch (error) {
-      console.error('Error signing out:', error);
-    }
-  };
 
   return (
     <Box sx={{ display: 'flex' }}>
-      <StyledAppBar
-        position="fixed"
-        open={open}
-        sx={{
-          backgroundColor: theme.palette.mode === 'dark' ? '#1D2226' : '#FFFFFF',
-          boxShadow: 'none',
-          borderBottom: `1px solid ${
-            theme.palette.mode === 'dark' ? '#38434F' : '#E0E0E0'
-          }`,
+      {/* App Bar */}
+      <AppBar 
+        position="fixed" 
+        sx={{ 
+          width: { sm: open ? `calc(100% - ${drawerWidth}px)` : '100%' },
+          ml: { sm: open ? `${drawerWidth}px` : 0 },
+          transition: theme.transitions.create(['width', 'margin'], {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.leavingScreen,
+          }),
         }}
       >
         <Toolbar>
           <IconButton
             color="inherit"
-            aria-label="open drawer"
-            onClick={handleDrawerOpen}
+            aria-label="toggle drawer"
+            onClick={() => setOpen(!open)}
             edge="start"
-            sx={{
-              mr: 2,
-              ...(open && { display: 'none' }),
-              color: theme.palette.mode === 'dark' ? '#FFFFFF' : '#000000',
-            }}
+            sx={{ mr: 2 }}
           >
             <MenuIcon />
           </IconButton>
-          <Typography
-            variant="h6"
-            noWrap
-            component="div"
-            sx={{
-              color: theme.palette.mode === 'dark' ? '#FFFFFF' : '#000000',
-            }}
-          >
-            Admin Portal
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <img 
+              src={logo} 
+              alt="HireQuest Logo" 
+              style={{ 
+                height: '32px', 
+                width: '32px',
+                filter: 'brightness(0) invert(1)'
+              }} 
+            />
+            <Typography variant="h6" noWrap component="div">
+              HireQuest
+            </Typography>
+          </Box>
         </Toolbar>
-      </StyledAppBar>
+      </AppBar>
+
+      {/* Drawer */}
       <Drawer
+        variant={isMobile ? "temporary" : "permanent"}
+        open={open}
+        onClose={() => isMobile && setOpen(false)}
+        ModalProps={{
+          keepMounted: true, // Better mobile performance
+        }}
         sx={{
           width: drawerWidth,
           flexShrink: 0,
+          whiteSpace: 'nowrap',
+          boxSizing: 'border-box',
           '& .MuiDrawer-paper': {
             width: drawerWidth,
             boxSizing: 'border-box',
-            backgroundColor: theme.palette.mode === 'dark' ? '#1D2226' : '#FFFFFF',
-            borderRight: `1px solid ${
-              theme.palette.mode === 'dark' ? '#38434F' : '#E0E0E0'
-            }`,
+            borderRight: `1px solid ${theme.palette.divider}`,
           },
         }}
-        variant="persistent"
-        anchor="left"
-        open={open}
       >
-        <DrawerHeader>
-          <IconButton onClick={handleDrawerClose}>
-            <ChevronLeftIcon
-              sx={{
-                color: theme.palette.mode === 'dark' ? '#FFFFFF' : '#000000',
-              }}
+        <Box sx={{ height: '64px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, pl: 1 }}>
+            <img 
+              src={logo} 
+              alt="HireQuest Logo" 
+              style={{ height: '24px', width: '24px' }} 
             />
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              HireQuest
+            </Typography>
+          </Box>
+          <IconButton onClick={() => setOpen(!open)}>
+            <ChevronLeftIcon size={20} />
           </IconButton>
-        </DrawerHeader>
-        <Divider
-          sx={{
-            borderColor: theme.palette.mode === 'dark' ? '#38434F' : '#E0E0E0',
-          }}
-        />
+        </Box>
+        <Divider />
         <List>
           {menuItems.map((item) => (
             <ListItem key={item.text} disablePadding>
               <ListItemButton
-                onClick={() => handleNavigation(item.path)}
                 selected={location.pathname === item.path}
+                onClick={() => {
+                  navigate(item.path);
+                  isMobile && setOpen(false);
+                }}
                 sx={{
+                  minHeight: 48,
+                  px: 2.5,
                   '&.Mui-selected': {
-                    backgroundColor: theme.palette.mode === 'dark'
-                      ? 'rgba(255, 255, 255, 0.08)'
-                      : 'rgba(0, 0, 0, 0.04)',
-                  },
-                  '&:hover': {
-                    backgroundColor: theme.palette.mode === 'dark'
-                      ? 'rgba(255, 255, 255, 0.12)'
-                      : 'rgba(0, 0, 0, 0.08)',
+                    backgroundColor: 'primary.main',
+                    color: 'white',
+                    '&:hover': {
+                      backgroundColor: 'primary.dark',
+                    },
+                    '& .MuiListItemIcon-root': {
+                      color: 'white',
+                    },
                   },
                 }}
               >
                 <ListItemIcon
                   sx={{
-                    color: location.pathname === item.path
-                      ? theme.palette.mode === 'dark'
-                        ? '#70B5F9'
-                        : '#0A66C2'
-                      : theme.palette.mode === 'dark'
-                      ? '#B0B7BF'
-                      : '#666666',
+                    minWidth: 40,
+                    color: location.pathname === item.path ? 'white' : 'inherit',
                   }}
                 >
                   {item.icon}
                 </ListItemIcon>
-                <ListItemText
-                  primary={item.text}
-                  sx={{
-                    '& .MuiListItemText-primary': {
-                      color: location.pathname === item.path
-                        ? theme.palette.mode === 'dark'
-                          ? '#70B5F9'
-                          : '#0A66C2'
-                        : theme.palette.mode === 'dark'
-                        ? '#FFFFFF'
-                        : '#000000',
-                    },
-                  }}
-                />
+                <ListItemText primary={item.text} />
               </ListItemButton>
             </ListItem>
           ))}
         </List>
-        <Divider
-          sx={{
-            borderColor: theme.palette.mode === 'dark' ? '#38434F' : '#E0E0E0',
-          }}
-        />
+        <Divider />
         <List>
           <ListItem disablePadding>
-            <ListItemButton onClick={handleLogout}>
-              <ListItemIcon
-                sx={{
-                  color: theme.palette.mode === 'dark' ? '#B0B7BF' : '#666666',
-                }}
-              >
+            <ListItemButton
+              onClick={logout}
+              sx={{
+                minHeight: 48,
+                px: 2.5,
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 40 }}>
                 <LogOut size={20} />
               </ListItemIcon>
-              <ListItemText
-                primary="Logout"
-                sx={{
-                  '& .MuiListItemText-primary': {
-                    color: theme.palette.mode === 'dark' ? '#FFFFFF' : '#000000',
-                  },
-                }}
-              />
+              <ListItemText primary="Logout" />
             </ListItemButton>
           </ListItem>
         </List>
       </Drawer>
-      <Main open={open}>
-        <DrawerHeader />
-        <Box
-          sx={{
-            backgroundColor: theme.palette.mode === 'dark' ? '#1D2226' : '#F3F2EF',
-            minHeight: 'calc(100vh - 64px)',
-            borderRadius: '8px',
-            p: 3,
-          }}
-        >
-          <Outlet />
-        </Box>
-      </Main>
+
+      {/* Main Content */}
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          p: 3,
+          width: '100%',
+          marginLeft: { sm: open ? `${drawerWidth}px` : 0 },
+          transition: theme.transitions.create(['width', 'margin'], {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.leavingScreen,
+          }),
+        }}
+      >
+        <Toolbar /> {/* This creates space below the AppBar */}
+        <Outlet />
+      </Box>
     </Box>
   );
-}
+};
+
+export default AdminLayout;
