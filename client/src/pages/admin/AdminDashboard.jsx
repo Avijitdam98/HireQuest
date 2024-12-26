@@ -4,7 +4,6 @@ import {
   Card,
   CardContent,
   Typography,
-  Button,
   Grid,
   Table,
   TableBody,
@@ -16,10 +15,11 @@ import {
   Tabs,
   Tab,
   Chip,
-  Link,
+  useTheme,
 } from '@mui/material';
 import { useAuth } from '../../hooks/useAuth';
 import { api } from '../../utils/api';
+import { formatDistanceToNow } from 'date-fns';
 
 function TabPanel({ children, value, index }) {
   return (
@@ -30,10 +30,16 @@ function TabPanel({ children, value, index }) {
 }
 
 export default function AdminDashboard() {
+  const theme = useTheme();
   const { user } = useAuth();
   const [tabValue, setTabValue] = useState(0);
-  const [jobs, setJobs] = useState([]);
-  const [applications, setApplications] = useState([]);
+  const [stats, setStats] = useState({
+    totalJobs: 0,
+    totalApplications: 0,
+    totalUsers: 0,
+    recentJobs: [],
+    recentApplications: [],
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -43,97 +49,150 @@ export default function AdminDashboard() {
   const loadData = async () => {
     try {
       setLoading(true);
-      // Get all jobs with their applications
-      const jobsData = await api.getEmployerJobs();
-      setJobs(jobsData);
+      
+      // Get all jobs
+      const jobs = await api.getJobs();
+      
+      // Get all applications
+      const applications = await api.getAllApplications();
+      
+      // Get all profiles
+      const { data: profiles } = await api.getProfiles();
 
-      // Flatten applications from all jobs
-      const allApplications = jobsData.reduce((acc, job) => {
-        const jobApplications = (job.applications || []).map(app => ({
-          ...app,
-          jobTitle: job.title,
-          company: job.company
-        }));
-        return [...acc, ...jobApplications];
-      }, []);
-      setApplications(allApplications);
-    } catch (err) {
-      console.error('Error loading admin data:', err);
+      // Calculate stats
+      const recentJobs = jobs.slice(0, 5);
+      const recentApplications = applications.slice(0, 5);
+
+      setStats({
+        totalJobs: jobs.length,
+        totalApplications: applications.length,
+        totalUsers: profiles.length,
+        recentJobs,
+        recentApplications,
+      });
+
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleUpdateStatus = async (applicationId, newStatus) => {
-    try {
-      await api.updateApplicationStatus(applicationId, newStatus);
-      loadData(); // Refresh data
-    } catch (err) {
-      console.error('Error updating application status:', err);
-    }
-  };
-
-  const handleDeleteJob = async (jobId) => {
-    if (window.confirm('Are you sure you want to delete this job?')) {
-      try {
-        await api.deleteJob(jobId);
-        loadData(); // Refresh data
-      } catch (err) {
-        console.error('Error deleting job:', err);
-      }
-    }
+  const handleTabChange = (event, newValue) => {
+    setTabValue(newValue);
   };
 
   if (loading) {
-    return <Typography>Loading...</Typography>;
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100vh',
+        }}
+      >
+        Loading...
+      </Box>
+    );
   }
 
   return (
-    <Box sx={{ width: '100%', p: 3 }}>
-      <Typography variant="h4" gutterBottom>
+    <Box>
+      <Typography variant="h4" gutterBottom sx={{ mb: 4 }}>
         Admin Dashboard
       </Typography>
 
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)}>
-          <Tab label="Jobs" />
-          <Tab label="Applications" />
+      {/* Stats Cards */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12} sm={6} md={4}>
+          <Card 
+            sx={{ 
+              height: '100%',
+              backgroundColor: theme.palette.mode === 'dark' ? '#282E33' : '#ffffff',
+            }}
+          >
+            <CardContent>
+              <Typography color="textSecondary" gutterBottom>
+                Total Jobs
+              </Typography>
+              <Typography variant="h3">{stats.totalJobs}</Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} sm={6} md={4}>
+          <Card 
+            sx={{ 
+              height: '100%',
+              backgroundColor: theme.palette.mode === 'dark' ? '#282E33' : '#ffffff',
+            }}
+          >
+            <CardContent>
+              <Typography color="textSecondary" gutterBottom>
+                Total Applications
+              </Typography>
+              <Typography variant="h3">{stats.totalApplications}</Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} sm={6} md={4}>
+          <Card 
+            sx={{ 
+              height: '100%',
+              backgroundColor: theme.palette.mode === 'dark' ? '#282E33' : '#ffffff',
+            }}
+          >
+            <CardContent>
+              <Typography color="textSecondary" gutterBottom>
+                Total Users
+              </Typography>
+              <Typography variant="h3">{stats.totalUsers}</Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Tabs */}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        <Tabs value={tabValue} onChange={handleTabChange}>
+          <Tab label="Recent Jobs" />
+          <Tab label="Recent Applications" />
         </Tabs>
       </Box>
 
+      {/* Recent Jobs Tab */}
       <TabPanel value={tabValue} index={0}>
-        <TableContainer component={Paper}>
+        <TableContainer 
+          component={Paper}
+          sx={{ 
+            backgroundColor: theme.palette.mode === 'dark' ? '#282E33' : '#ffffff',
+          }}
+        >
           <Table>
             <TableHead>
               <TableRow>
                 <TableCell>Title</TableCell>
                 <TableCell>Company</TableCell>
                 <TableCell>Location</TableCell>
-                <TableCell>Type</TableCell>
-                <TableCell>Salary Range</TableCell>
-                <TableCell>Applications</TableCell>
-                <TableCell>Actions</TableCell>
+                <TableCell>Posted</TableCell>
+                <TableCell>Status</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {jobs.map((job) => (
+              {stats.recentJobs.map((job) => (
                 <TableRow key={job.id}>
                   <TableCell>{job.title}</TableCell>
                   <TableCell>{job.company}</TableCell>
                   <TableCell>{job.location}</TableCell>
-                  <TableCell>{job.type}</TableCell>
-                  <TableCell>{job.salary_range}</TableCell>
                   <TableCell>
-                    {job.applications?.length || 0} applications
+                    {formatDistanceToNow(new Date(job.created_at), { addSuffix: true })}
                   </TableCell>
                   <TableCell>
-                    <Button
-                      color="error"
+                    <Chip 
+                      label={job.status} 
+                      color={job.status === 'active' ? 'success' : 'default'}
                       size="small"
-                      onClick={() => handleDeleteJob(job.id)}
-                    >
-                      Delete
-                    </Button>
+                    />
                   </TableCell>
                 </TableRow>
               ))}
@@ -142,63 +201,41 @@ export default function AdminDashboard() {
         </TableContainer>
       </TabPanel>
 
+      {/* Recent Applications Tab */}
       <TabPanel value={tabValue} index={1}>
-        <TableContainer component={Paper}>
+        <TableContainer 
+          component={Paper}
+          sx={{ 
+            backgroundColor: theme.palette.mode === 'dark' ? '#282E33' : '#ffffff',
+          }}
+        >
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Job Title</TableCell>
-                <TableCell>Company</TableCell>
                 <TableCell>Applicant</TableCell>
-                <TableCell>CV</TableCell>
+                <TableCell>Job</TableCell>
+                <TableCell>Applied</TableCell>
                 <TableCell>Status</TableCell>
-                <TableCell>Applied Date</TableCell>
-                <TableCell>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {applications.map((application) => (
+              {stats.recentApplications.map((application) => (
                 <TableRow key={application.id}>
-                  <TableCell>{application.jobTitle}</TableCell>
-                  <TableCell>{application.company}</TableCell>
                   <TableCell>{application.user_id}</TableCell>
+                  <TableCell>{application.job_id}</TableCell>
                   <TableCell>
-                    <Link href={application.cv_url} target="_blank">
-                      View CV
-                    </Link>
+                    {formatDistanceToNow(new Date(application.created_at), { addSuffix: true })}
                   </TableCell>
                   <TableCell>
                     <Chip 
                       label={application.status} 
                       color={
-                        application.status === 'accepted' ? 'success' : 
-                        application.status === 'rejected' ? 'error' : 
+                        application.status === 'accepted' ? 'success' :
+                        application.status === 'rejected' ? 'error' :
                         'default'
                       }
+                      size="small"
                     />
-                  </TableCell>
-                  <TableCell>
-                    {new Date(application.created_at).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell>
-                    <Box display="flex" gap={1}>
-                      <Button
-                        variant={application.status === 'accepted' ? 'contained' : 'outlined'}
-                        color="success"
-                        size="small"
-                        onClick={() => handleUpdateStatus(application.id, 'accepted')}
-                      >
-                        Accept
-                      </Button>
-                      <Button
-                        variant={application.status === 'rejected' ? 'contained' : 'outlined'}
-                        color="error"
-                        size="small"
-                        onClick={() => handleUpdateStatus(application.id, 'rejected')}
-                      >
-                        Reject
-                      </Button>
-                    </Box>
                   </TableCell>
                 </TableRow>
               ))}

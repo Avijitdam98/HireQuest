@@ -5,182 +5,113 @@ import SignUp from './pages/auth/SignUp';
 import Profile from './pages/profile/Profile';
 import Users from './pages/admin/Users';
 import Dashboard from './pages/admin/Dashboard';
-import Applications from './pages/admin/Applications';
+import Applications from './pages/applications/Applications';
 import JobList from './pages/jobs/JobList';
 import CreateJob from './pages/employer/CreateJob';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { useAuth } from './hooks/useAuth';
-import useChatStore from './store/useChatStore';
 import { useState, useEffect } from 'react';
 import { Box, CircularProgress } from '@mui/material';
 import ErrorBoundary from './components/ErrorBoundary';
 import AdminLayout from './components/layout/AdminLayout';
 import Chat from './pages/chat/Chat';
 import AdminDashboard from './pages/admin/AdminDashboard';
-import { ThemeProvider } from './providers/ThemeProvider';
 import Settings from './pages/settings/Settings';
+import { ThemeProvider } from './theme/ThemeProvider';
 
 function App() {
   const { user, loading } = useAuth();
-  const initializeWebSocket = useChatStore(state => state.initializeWebSocket);
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
     if (!loading) {
-      console.log('App initialized, user:', user);
       setIsInitialized(true);
     }
   }, [loading]);
 
-  useEffect(() => {
-    if (user && user.user_metadata?.role === 'jobseeker') {
-      initializeWebSocket();
-    }
-  }, [user, initializeWebSocket]);
-
   if (!isInitialized) {
     return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          minHeight: '100vh',
-        }}
-      >
-        <CircularProgress />
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        backgroundColor: theme => theme.palette.mode === 'dark' ? '#1D2226' : '#f3f2ef'
+      }}>
+        <CircularProgress sx={{ 
+          color: theme => theme.palette.mode === 'dark' ? '#70B5F9' : '#0A66C2' 
+        }} />
       </Box>
     );
   }
 
+  // Check user roles from metadata
   const isAdmin = user?.user_metadata?.role === 'admin';
   const isEmployer = user?.user_metadata?.role === 'employer';
-  const isJobSeeker = !isAdmin && !isEmployer;
-
-  console.log('User role:', { isAdmin, isEmployer, isJobSeeker });
+  const isJobSeeker = user?.user_metadata?.role === 'jobseeker';
 
   return (
-    <ErrorBoundary>
-      <ThemeProvider>
+    <ThemeProvider>
+      <ErrorBoundary>
         <Router>
           <Routes>
             {/* Public Routes */}
-            <Route 
-              path="/login" 
-              element={
-                user ? (
-                  <Navigate 
-                    to={
-                      isAdmin 
-                        ? "/admin/dashboard"
-                        : isEmployer 
-                          ? "/employer/jobs"
-                          : "/jobs"
-                    } 
-                    replace 
-                  />
-                ) : (
-                  <Login />
-                )
-              } 
-            />
-            
-            <Route 
-              path="/signup" 
-              element={
-                user ? (
-                  <Navigate 
-                    to={
-                      isAdmin 
-                        ? "/admin/dashboard"
-                        : isEmployer 
-                          ? "/employer/jobs"
-                          : "/jobs"
-                    } 
-                    replace 
-                  />
-                ) : (
-                  <SignUp />
-                )
-              } 
-            />
+            <Route path="/login" element={
+              !user ? <Login /> : <Navigate to={isAdmin ? '/admin' : '/'} replace />
+            } />
+            <Route path="/signup" element={
+              !user ? <SignUp /> : <Navigate to="/" replace />
+            } />
+
+            {/* Admin Routes */}
+            <Route path="/admin" element={<ProtectedRoute user={user} loading={loading} />}>
+              <Route element={<AdminLayout />}>
+                <Route index element={<AdminDashboard />} />
+                <Route path="users" element={<Users />} />
+                <Route path="applications" element={<Applications />} />
+                <Route path="settings" element={<Settings />} />
+              </Route>
+            </Route>
 
             {/* Protected Routes */}
-            <Route
-              element={
-                <ProtectedRoute>
-                  <Layout />
-                </ProtectedRoute>
-              }
-            >
-              <Route path="/" element={
-                <Navigate 
-                  to={
-                    isAdmin 
-                      ? "/admin/dashboard"
-                      : isEmployer 
-                        ? "/employer/jobs"
-                        : "/jobs"
-                  } 
-                  replace 
-                />
-              } />
+            <Route element={<ProtectedRoute user={user} loading={loading} />}>
+              <Route element={<Layout />}>
+                <Route path="/" element={
+                  isAdmin ? (
+                    <Navigate to="/admin" replace />
+                  ) : (
+                    <Dashboard />
+                  )
+                } />
+                <Route path="/jobs" element={<JobList />} />
+                <Route path="/applications" element={<Applications />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/chat" element={<Chat />} />
 
-              {/* Common Routes */}
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/chat" element={<Chat />} />
-
-              {/* Job Seeker Routes */}
-              {isJobSeeker && (
-                <>
-                  <Route path="/jobs" element={<JobList />} />
-                  <Route path="/applications" element={<Applications userView />} />
-                </>
-              )}
-
-              {/* Employer Routes */}
-              {isEmployer && (
-                <>
-                  <Route path="/employer/create-job" element={<CreateJob />} />
-                  <Route path="/employer/jobs" element={<JobList employerView />} />
-                  <Route path="/employer/applications" element={<Applications employerView />} />
-                </>
-              )}
-
-              {/* Admin Routes */}
-              {isAdmin && (
-                <>
-                  <Route path="/admin/dashboard" element={<Dashboard />} />
-                  <Route path="/admin/users" element={<Users />} />
-                  <Route path="/admin/applications" element={<Applications adminView />} />
-                  <Route path="/admin/admin-dashboard" element={<AdminDashboard />} />
-                </>
-              )}
+                {/* Employer Routes */}
+                {isEmployer && (
+                  <>
+                    <Route path="/jobs/create" element={<CreateJob />} />
+                  </>
+                )}
+              </Route>
             </Route>
 
             {/* Catch-all Route */}
-            <Route 
-              path="*" 
-              element={
-                <Navigate 
-                  to={
-                    user 
-                      ? isAdmin 
-                        ? "/admin/dashboard"
-                        : isEmployer 
-                          ? "/employer/jobs"
-                          : "/jobs"
-                      : "/login"
-                  } 
-                  replace 
-                />
-              } 
-            />
+            <Route path="*" element={
+              !user ? (
+                <Navigate to="/login" replace />
+              ) : isAdmin ? (
+                <Navigate to="/admin" replace />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            } />
           </Routes>
         </Router>
-      </ThemeProvider>
-    </ErrorBoundary>
+      </ErrorBoundary>
+    </ThemeProvider>
   );
 }
 

@@ -72,11 +72,19 @@ export const api = {
   },
 
   async deleteJob(id) {
-    const { error } = await supabase
+    // First delete all applications for this job
+    const { error: appDeleteError } = await supabase
+      .from('applications')
+      .delete()
+      .eq('job_id', id);
+    if (appDeleteError) throw appDeleteError;
+
+    // Then delete the job itself
+    const { error: jobDeleteError } = await supabase
       .from('jobs')
       .delete()
       .eq('id', id);
-    if (error) throw error;
+    if (jobDeleteError) throw jobDeleteError;
   },
 
   // Storage
@@ -204,6 +212,15 @@ export const api = {
   },
 
   // Profiles
+  async getProfiles() {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return { data, error: null };
+  },
+
   profiles: {
     async getById(id) {
       const { data, error } = await supabase

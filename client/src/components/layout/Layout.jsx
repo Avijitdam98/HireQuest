@@ -33,178 +33,223 @@ import {
   Moon,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
-import { useThemeMode } from '../../providers/ThemeProvider';
+import { useColorMode } from '../../hooks/useColorMode';
 import Logo from '../common/Logo';
 
 const drawerWidth = 240;
 
-const Layout = ({ children }) => {
+const Layout = () => {
   const theme = useTheme();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  const { mode, toggleTheme } = useThemeMode();
+  const { toggleColorMode } = useColorMode();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
 
   const isAdmin = user?.user_metadata?.role === 'admin';
   const isEmployer = user?.user_metadata?.role === 'employer';
+  const isDarkMode = theme.palette.mode === 'dark';
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
   };
 
-  const handleMenuOpen = (event) => {
+  const handleMenu = (event) => {
     setAnchorEl(event.currentTarget);
   };
 
-  const handleMenuClose = () => {
+  const handleClose = () => {
     setAnchorEl(null);
   };
 
   const handleSignOut = async () => {
-    try {
-      await signOut();
-      navigate('/login');
-    } catch (error) {
-      console.error('Error signing out:', error);
-    }
+    await signOut();
+    navigate('/login');
   };
 
   const menuItems = [
-    ...(isAdmin
-      ? [
-          { text: 'Dashboard', icon: <Home />, path: '/admin/dashboard' },
-          { text: 'Users', icon: <Users />, path: '/admin/users' },
-          { text: 'Applications', icon: <FileText />, path: '/admin/applications' },
-        ]
-      : isEmployer
-      ? [
-          { text: 'Jobs', icon: <Briefcase />, path: '/employer/jobs' },
-          { text: 'Post Job', icon: <PlusCircle />, path: '/employer/create-job' },
-          { text: 'Applications', icon: <FileText />, path: '/employer/applications' },
-        ]
-      : [
-          { text: 'Jobs', icon: <Briefcase />, path: '/jobs' },
-          { text: 'My Applications', icon: <FileText />, path: '/applications' },
-        ]),
-    { text: 'Chat', icon: <MessageSquare />, path: '/chat' },
+    {
+      text: 'Home',
+      icon: <Home size={20} />,
+      path: '/',
+      show: true,
+    },
+    {
+      text: 'Jobs',
+      icon: <Briefcase size={20} />,
+      path: '/jobs',
+      show: true,
+    },
+    {
+      text: 'Applications',
+      icon: <FileText size={20} />,
+      path: '/applications',
+      show: true,
+    },
+    {
+      text: 'Messages',
+      icon: <MessageSquare size={20} />,
+      path: '/chat',
+      show: true,
+    },
+    {
+      text: 'Profile',
+      icon: <User size={20} />,
+      path: '/profile',
+      show: true,
+    },
   ];
 
+  if (isEmployer) {
+    menuItems.splice(2, 0, {
+      text: 'Post Job',
+      icon: <PlusCircle size={20} />,
+      path: '/jobs/create',
+      show: true,
+    });
+  }
+
   const drawer = (
-    <Box>
-      <Box 
-        sx={{ 
-          p: 2, 
-          display: 'flex', 
-          justifyContent: 'center',
-          bgcolor: theme.palette.background.paper,
-        }}
-      >
-        <Logo size="medium" />
+    <Box sx={{ overflow: 'auto' }}>
+      <Box sx={{ p: 2 }}>
+        <Logo />
       </Box>
       <Divider />
       <List>
-        {menuItems.map((item) => (
-          <ListItem key={item.text} disablePadding>
-            <ListItemButton
-              onClick={() => {
-                navigate(item.path);
-                setMobileOpen(false);
-              }}
-              sx={{
-                color: theme.palette.text.primary,
-                '&:hover': {
-                  bgcolor: theme.palette.action.hover,
-                },
-              }}
-            >
-              <ListItemIcon 
-                sx={{ 
-                  color: theme.palette.primary.main,
-                  minWidth: 40,
+        {menuItems
+          .filter((item) => item.show)
+          .map((item) => (
+            <ListItem key={item.text} disablePadding>
+              <ListItemButton
+                onClick={() => {
+                  navigate(item.path);
+                  setMobileOpen(false);
                 }}
-              >
-                {item.icon}
-              </ListItemIcon>
-              <ListItemText 
-                primary={item.text} 
                 sx={{
-                  '& .MuiTypography-root': {
-                    color: theme.palette.text.primary,
+                  borderRadius: 1,
+                  mx: 1,
+                  '&:hover': {
+                    backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
                   },
                 }}
-              />
-            </ListItemButton>
-          </ListItem>
-        ))}
+              >
+                <ListItemIcon sx={{ color: isDarkMode ? '#B0B7BF' : '#666666' }}>
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText 
+                  primary={item.text} 
+                  sx={{ 
+                    color: isDarkMode ? '#FFFFFF' : '#000000E6',
+                  }}
+                />
+              </ListItemButton>
+            </ListItem>
+          ))}
       </List>
     </Box>
   );
 
   return (
-    <Box sx={{ display: 'flex' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
       <AppBar
         position="fixed"
         sx={{
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          ml: { sm: `${drawerWidth}px` },
-          bgcolor: 'background.paper',
-          color: 'text.primary',
+          backgroundColor: theme.palette.mode === 'dark' ? '#282E33' : '#ffffff',
+          borderBottom: `1px solid ${
+            theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : '#e0e0e0'
+          }`,
+          boxShadow: 'none',
+          zIndex: (theme) => theme.zIndex.drawer + 1,
         }}
       >
         <Toolbar>
           <IconButton
             color="inherit"
+            aria-label="open drawer"
             edge="start"
             onClick={handleDrawerToggle}
-            sx={{ mr: 2, display: { sm: 'none' } }}
+            sx={{
+              mr: 2,
+              color: theme.palette.mode === 'dark' ? '#FFFFFF' : '#000000E6',
+            }}
           >
-            <MenuIcon />
+            <MenuIcon size={24} />
           </IconButton>
+
           <Box sx={{ flexGrow: 1 }} />
-          <IconButton onClick={toggleTheme} color="inherit">
-            {mode === 'dark' ? <Sun /> : <Moon />}
-          </IconButton>
+
           <IconButton
-            onClick={handleMenuOpen}
-            sx={{ ml: 2 }}
+            onClick={toggleColorMode}
+            sx={{
+              mr: 2,
+              color: theme.palette.mode === 'dark' ? '#FFFFFF' : '#000000E6',
+            }}
+          >
+            {theme.palette.mode === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+          </IconButton>
+
+          <IconButton
+            onClick={handleMenu}
+            sx={{
+              padding: 0.5,
+              border: `2px solid ${
+                theme.palette.mode === 'dark' ? '#70B5F9' : '#0A66C2'
+              }`,
+              '&:hover': {
+                backgroundColor: 'transparent',
+              },
+            }}
           >
             <Avatar
+              alt={user?.email}
               src={user?.user_metadata?.avatar_url}
-              alt={user?.user_metadata?.full_name}
+              sx={{ width: 32, height: 32 }}
             />
           </IconButton>
+
           <Menu
+            id="menu-appbar"
             anchorEl={anchorEl}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'right',
+            }}
+            keepMounted
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'right',
+            }}
             open={Boolean(anchorEl)}
-            onClose={handleMenuClose}
-            onClick={handleMenuClose}
+            onClose={handleClose}
           >
-            <MenuItem onClick={() => navigate('/profile')}>
-              <ListItemIcon>
-                <User size={18} />
-              </ListItemIcon>
-              <Typography>Profile</Typography>
+            <MenuItem
+              onClick={() => {
+                handleClose();
+                navigate('/profile');
+              }}
+            >
+              Profile
             </MenuItem>
-            <MenuItem onClick={() => navigate('/settings')}>
-              <ListItemIcon>
-                <Settings size={18} />
-              </ListItemIcon>
-              <Typography>Settings</Typography>
+            <MenuItem
+              onClick={() => {
+                handleClose();
+                navigate('/settings');
+              }}
+            >
+              Settings
             </MenuItem>
             <Divider />
-            <MenuItem onClick={handleSignOut}>
-              <ListItemIcon>
-                <LogOut size={18} />
-              </ListItemIcon>
-              <Typography>Sign Out</Typography>
-            </MenuItem>
+            <MenuItem onClick={handleSignOut}>Sign Out</MenuItem>
           </Menu>
         </Toolbar>
       </AppBar>
+
       <Box
         component="nav"
-        sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
+        sx={{
+          width: { sm: drawerWidth },
+          flexShrink: { sm: 0 },
+        }}
       >
         <Drawer
           variant="temporary"
@@ -218,8 +263,10 @@ const Layout = ({ children }) => {
             '& .MuiDrawer-paper': {
               boxSizing: 'border-box',
               width: drawerWidth,
-              bgcolor: theme.palette.background.paper,
-              borderRight: `1px solid ${theme.palette.divider}`,
+              backgroundColor: theme.palette.mode === 'dark' ? '#282E33' : '#ffffff',
+              borderRight: `1px solid ${
+                theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : '#e0e0e0'
+              }`,
             },
           }}
         >
@@ -232,8 +279,10 @@ const Layout = ({ children }) => {
             '& .MuiDrawer-paper': {
               boxSizing: 'border-box',
               width: drawerWidth,
-              bgcolor: theme.palette.background.paper,
-              borderRight: `1px solid ${theme.palette.divider}`,
+              backgroundColor: theme.palette.mode === 'dark' ? '#282E33' : '#ffffff',
+              borderRight: `1px solid ${
+                theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : '#e0e0e0'
+              }`,
             },
           }}
           open
@@ -241,14 +290,16 @@ const Layout = ({ children }) => {
           {drawer}
         </Drawer>
       </Box>
+
       <Box
         component="main"
         sx={{
           flexGrow: 1,
           p: 3,
           width: { sm: `calc(100% - ${drawerWidth}px)` },
-          ml: { sm: `${drawerWidth}px` },
-          mt: '64px',
+          backgroundColor: theme.palette.mode === 'dark' ? '#1D2226' : '#f3f2ef',
+          minHeight: '100vh',
+          marginTop: '64px',
         }}
       >
         <Outlet />

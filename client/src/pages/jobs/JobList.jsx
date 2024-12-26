@@ -16,9 +16,12 @@ import {
   CircularProgress,
   Alert,
   IconButton,
+  Tooltip,
 } from '@mui/material';
+import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { api } from '../../utils/api';
+import { initializeChat } from '../../utils/chat';
 import { supabase } from '../../lib/supabase';
 import { MessageSquare } from 'lucide-react';
 
@@ -34,6 +37,10 @@ export default function JobList() {
   const [applying, setApplying] = useState(false);
   const [applicationError, setApplicationError] = useState(null);
   const [expandedJobId, setExpandedJobId] = useState(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingJob, setEditingJob] = useState(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [jobToDelete, setJobToDelete] = useState(null);
 
   useEffect(() => {
     loadJobs();
@@ -104,34 +111,8 @@ export default function JobList() {
 
   const handleChat = async (application) => {
     try {
-      // Check if chat already exists
-      const { data: existingChat } = await supabase
-        .from('chats')
-        .select('id')
-        .eq('application_id', application.id)
-        .single();
-
-      if (existingChat) {
-        navigate('/chat', { state: { chatId: existingChat.id } });
-        return;
-      }
-
-      // Create new chat
-      const { data: newChat, error } = await supabase
-        .from('chats')
-        .insert([
-          {
-            application_id: application.id,
-            employer_id: user.id,
-            jobseeker_id: application.user_id
-          }
-        ])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      navigate('/chat', { state: { chatId: newChat.id } });
+      const chat = await initializeChat(application, user.id);
+      navigate('/chat', { state: { chatId: chat.id } });
     } catch (error) {
       console.error('Error handling chat:', error);
       setError('Failed to start chat. Please try again.');
@@ -140,6 +121,48 @@ export default function JobList() {
 
   const toggleJobExpand = (jobId) => {
     setExpandedJobId(expandedJobId === jobId ? null : jobId);
+  };
+
+  const handleEdit = (job) => {
+    setEditingJob({ ...job });
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    try {
+      setLoading(true);
+      // Clean the job data before sending to API
+      const { applications, created_at, employer_id, id, ...jobData } = editingJob;
+      await api.updateJob(editingJob.id, jobData);
+      setEditDialogOpen(false);
+      setEditingJob(null);
+      loadJobs();
+    } catch (err) {
+      console.error('Error updating job:', err);
+      setError('Failed to update job. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = (job) => {
+    setJobToDelete(job);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    try {
+      setLoading(true);
+      await api.deleteJob(jobToDelete.id);
+      setDeleteDialogOpen(false);
+      setJobToDelete(null);
+      loadJobs();
+    } catch (err) {
+      console.error('Error deleting job:', err);
+      setError('Failed to delete job. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (loading) {
@@ -159,7 +182,9 @@ export default function JobList() {
   }
 
   return (
-    <Box p={3}>
+    <Box sx={{ p: 3 }}>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      
       <Typography variant="h4" gutterBottom>
         {userRole === 'employer' ? 'Your Job Postings' : 'Available Jobs'}
       </Typography>
@@ -169,6 +194,35 @@ export default function JobList() {
           <Grid item xs={12} key={job.id}>
             <Card>
               <CardContent>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                  <Typography variant="h5" component="h2">
+                    {job.title}
+                  </Typography>
+                  {userRole === 'employer' && job.employer_id === user.id && (
+                    <Box>
+                      <Tooltip title="Edit Job">
+                        <IconButton 
+                          color="primary" 
+                          onClick={() => handleEdit(job)}
+                          size="small"
+                          sx={{ mr: 1 }}
+                        >
+                          <EditIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Delete Job">
+                        <IconButton 
+                          color="error" 
+                          onClick={() => handleDelete(job)}
+                          size="small"
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  )}
+                </Box>
+
                 <Grid container spacing={2}>
                   <Grid item xs={12}>
                     <Box>
@@ -352,6 +406,67 @@ export default function JobList() {
             disabled={applying || !cvFile}
           >
             {applying ? <CircularProgress size={24} /> : 'Submit Application'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Edit Job</DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            label="Title"
+            value={editingJob?.title || ''}
+            onChange={(e) => setEditingJob({ ...editingJob, title: e.target.value })}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Description"
+            value={editingJob?.description || ''}
+            onChange={(e) => setEditingJob({ ...editingJob, description: e.target.value })}
+            margin="normal"
+            multiline
+            rows={4}
+          />
+          <TextField
+            fullWidth
+            label="Requirements"
+            value={editingJob?.requirements || ''}
+            onChange={(e) => setEditingJob({ ...editingJob, requirements: e.target.value })}
+            margin="normal"
+            multiline
+            rows={4}
+          />
+          <TextField
+            fullWidth
+            label="Salary Range"
+            value={editingJob?.salary_range || ''}
+            onChange={(e) => setEditingJob({ ...editingJob, salary_range: e.target.value })}
+            margin="normal"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleSaveEdit} variant="contained" color="primary">
+            Save Changes
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+        <DialogTitle>Delete Job</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete this job posting? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleConfirmDelete} color="error" variant="contained">
+            Delete
           </Button>
         </DialogActions>
       </Dialog>
